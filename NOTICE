@@ -1,0 +1,27 @@
+JGalbss COD4 notices
+====================
+
+This repository is a modified version of KisakCOD:
+
+    https://github.com/SwagSoftware/KisakCOD
+
+The work has been modified by Josh Galbreath and other contributors during
+2026. The modifications include a native Apple Silicon/macOS client and
+associated platform, renderer, audio, networking, packaging, and reliability
+work. This notice identifies the work as changed and gives the relevant year;
+version-control history identifies individual changes where that history is
+available.
+
+Except where a file or THIRD_PARTY_NOTICES.txt states otherwise, this program
+is distributed under the GNU General Public License, version 3. A copy is in
+LICENSE.
+
+Copyright and license notices in files inherited from KisakCOD or third-party
+projects remain the property of their respective holders. No retail game
+data, maps, textures, sounds, videos, or other proprietary game assets are
+part of the source distribution. Users must obtain compatible game data
+separately from an authorized source.
+
+Call of Duty and related names and marks are the property of their respective
+owners. This independent project is not endorsed by or affiliated with those
+owners.

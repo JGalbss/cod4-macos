@@ -1,0 +1,42 @@
+name: Feature / port task
+description: Propose a task or improvement for the port
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: subsystem
+    attributes:
+      label: Subsystem
+      options:
+        - gfx (renderer)
+        - sound
+        - net
+        - posix (Win32→POSIX stubs)
+        - switch (libnx-specific)
+        - cmake / build
+        - deps (third-party)
+        - docs
+        - ci
+        - other
+    validations:
+      required: true
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Port phase
+      options:
+        - "Phase 1 — macOS/Linux baseline"
+        - "Phase 2 — Switch cross-compile"
+        - "Phase 3 — Switch optimization"
+        - "Phase-independent"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+    validations:
+      required: true
+  - type: textarea
+    id: approach
+    attributes:
+      label: Proposed approach (optional)

@@ -1,0 +1,94 @@
+name: CI
+
+# Manual-only trigger for now to avoid email spam during rapid port
+# iteration. Re-enable push/PR triggers once the pipeline stabilizes and
+# build-failure notifications become desirable again.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  switch-build:
+    name: Cross-compile + NRO (Switch / devkitA64)
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          echo "DEVKITPRO=$DEVKITPRO"
+          aarch64-none-elf-gcc --version | head -1
+          cmake --version | head -1
+
+      - name: Configure
+        run: |
+          cmake -B build-switch -S . \
+            -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/Switch.cmake \
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build-switch
+
+      - name: Verify NRO output
+        run: |
+          ls -la bin/switch/
+          file bin/switch/kisak_switch.nro
+          head -c 16 bin/switch/kisak_switch.nro | xxd
+
+      - name: Upload NRO artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kisak_switch-nro
+          path: bin/switch/kisak_switch.nro
+
+  posix-build:
+    name: Configure + build + smoke (host POSIX)
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cmake ninja-build libgl1-mesa-dev \
+            libsdl2-dev libopenal-dev libglm-dev zlib1g-dev
+
+      - name: Install deps (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja cmake sdl2-compat glm
+
+      - name: Configure
+        run: cmake -B build-posix -S . -G Ninja -DCMAKE_BUILD_TYPE=Debug -DKISAK_TARGET=posix
+
+      - name: Build
+        run: cmake --build build-posix
+
+      - name: Verify native executable
+        shell: bash
+        run: |
+          test -x 'bin/posix/jgalbs cod4'
+          file 'bin/posix/jgalbs cod4'
+
+  format-check:
+    name: EditorConfig / whitespace check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install editorconfig-checker
+        run: |
+          curl -sL https://github.com/editorconfig-checker/editorconfig-checker/releases/download/v3.0.3/ec-linux-amd64.tar.gz \
+            | sudo tar -xz -C /usr/local/bin --strip-components=1 bin/ec-linux-amd64
+          sudo mv /usr/local/bin/ec-linux-amd64 /usr/local/bin/ec
+      - name: Run editorconfig-checker
+        # Upstream sub-trees have inconsistent whitespace; only check files
+        # we have added under docs/ and .github/ for now.
+        run: ec docs .github CHANGELOG.md CONTRIBUTING.md

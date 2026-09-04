@@ -1,0 +1,191 @@
+diff --git a/src/d3d9/meson.build b/src/d3d9/meson.build
+index 1ce6f2e..343fb03 100644
+--- a/src/d3d9/meson.build
++++ b/src/d3d9/meson.build
+@@ -56,7 +56,10 @@ d3d9_src = [
+ d3d9_ld_args      = []
+ d3d9_link_depends = []
+ 
+-if platform != 'windows'
++# Apple's ld has no --version-script. Its -exported_symbols_list wants a bare list
++# of symbols rather than a version script, and nothing here needs the hiding, so
++# just link everything on Darwin.
++if platform != 'windows' and platform != 'darwin'
+   d3d9_ld_args      += [ '-Wl,--version-script', join_paths(meson.current_source_dir(), 'd3d9.sym') ]
+   d3d9_link_depends += files('d3d9.sym')
+ endif
+diff --git a/src/dxvk/dxvk_device_info.cpp b/src/dxvk/dxvk_device_info.cpp
+index 63d89d9..fe8a985 100644
+--- a/src/dxvk/dxvk_device_info.cpp
++++ b/src/dxvk/dxvk_device_info.cpp
+@@ -831,7 +831,16 @@ namespace dxvk {
+       ENABLE_FEATURE(core.features, fillModeNonSolid, true),
+       ENABLE_FEATURE(core.features, fragmentStoresAndAtomics, true),
+       ENABLE_FEATURE(core.features, fullDrawIndexUint32, true),
++      // Metal has no geometry shaders and MoltenVK does not emulate them, so
++      // requiring one rejects every Apple GPU outright. Inside D3D9 the only user is
++      // the software vertex processing emulator in d3d9_swvp_emu.cpp; a title that
++      // asks for hardware vertex processing never reaches it. D3D10/11 do need this,
++      // which is why it stays required everywhere else.
++#ifdef __APPLE__
++      ENABLE_FEATURE(core.features, geometryShader, false),
++#else
+       ENABLE_FEATURE(core.features, geometryShader, true),
++#endif
+       ENABLE_FEATURE(core.features, imageCubeArray, true),
+       ENABLE_FEATURE(core.features, independentBlend, true),
+       ENABLE_FEATURE(core.features, largePoints, false),
+@@ -844,7 +853,13 @@ namespace dxvk {
+       ENABLE_FEATURE(core.features, sampleRateShading, true),
+       ENABLE_FEATURE(core.features, samplerAnisotropy, true),
+       ENABLE_FEATURE(core.features, shaderClipDistance, true),
++      // The other feature Metal has no answer for. Cull distance is a D3D10+ concept
++      // (SV_CullDistance); nothing in D3D9 can ask for it.
++#ifdef __APPLE__
++      ENABLE_FEATURE(core.features, shaderCullDistance, false),
++#else
+       ENABLE_FEATURE(core.features, shaderCullDistance, true),
++#endif
+       ENABLE_FEATURE(core.features, shaderFloat64, false),
+       ENABLE_FEATURE(core.features, shaderImageGatherExtended, true),
+       ENABLE_FEATURE(core.features, shaderInt16, true),
+@@ -929,7 +944,16 @@ namespace dxvk {
+       ENABLE_EXT_FEATURE(extCustomBorderColor, customBorderColorWithoutFormat, false),
+ 
+       /* Depth clip matches D3D semantics where depth clamp does not */
++      // MoltenVK offers VK_EXT_depth_clip_control but not depth_clip_enable, which
++      // is the third and last thing it cannot give DXVK. Losing it means depth
++      // clipping can no longer be turned off independently of clamping, so geometry
++      // that crosses the near plane may clip where it used to clamp; depthClamp
++      // itself is supported and covers the common case.
++#ifdef __APPLE__
++      ENABLE_EXT_FEATURE(extDepthClipEnable, depthClipEnable, false),
++#else
+       ENABLE_EXT_FEATURE(extDepthClipEnable, depthClipEnable, true),
++#endif
+ 
+       /* Controls depth bias behaviour with emulated depth formats */
+       ENABLE_EXT_FEATURE(extDepthBiasControl, depthBiasControl, false),
+@@ -985,9 +1009,22 @@ namespace dxvk {
+       ENABLE_EXT_FEATURE(extPageableDeviceLocalMemory, pageableDeviceLocalMemory, false),
+ 
+       /* Robustness, all features effectively required for correctness */
++      // MoltenVK exposes VK_EXT_robustness2 but reports both of these false, and they
++      // are the last two things standing between this and a working device on Apple
++      // hardware. Upstream calls them required for correctness rather than for
++      // function: without nullDescriptor an unbound resource reads as undefined
++      // instead of zero, and without robustBufferAccess2 an out-of-bounds access is
++      // undefined rather than clamped. A title that always binds what it samples will
++      // not notice; one that does not may show artifacts.
++#ifdef __APPLE__
++      ENABLE_EXT_FEATURE(extRobustness2, robustBufferAccess2, false),
++      ENABLE_EXT_FEATURE(extRobustness2, robustImageAccess2, false),
++      ENABLE_EXT_FEATURE(extRobustness2, nullDescriptor, false),
++#else
+       ENABLE_EXT_FEATURE(extRobustness2, robustBufferAccess2, true),
+       ENABLE_EXT_FEATURE(extRobustness2, robustImageAccess2, false),
+       ENABLE_EXT_FEATURE(extRobustness2, nullDescriptor, true),
++#endif
+ 
+       /* Sample locations, used to "disable" MSAA rendering */
+       ENABLE_EXT(extSampleLocations, false),
+diff --git a/src/dxvk/dxvk_instance.cpp b/src/dxvk/dxvk_instance.cpp
+index 3041def..2eac6d0 100644
+--- a/src/dxvk/dxvk_instance.cpp
++++ b/src/dxvk/dxvk_instance.cpp
+@@ -248,7 +248,18 @@ namespace dxvk {
+       appInfo.engineVersion         = VK_MAKE_API_VERSION(0, 3, 1, 0);
+       appInfo.apiVersion            = DxvkVulkanApiVersion;
+ 
++      // MoltenVK is a portability driver, so the loader hides it unless the instance
++      // asks for portability devices by name and by flag. Without both, every
++      // vkCreateInstance on macOS returns VK_ERROR_INCOMPATIBLE_DRIVER.
++      VkInstanceCreateFlags instanceFlags = 0;
++
++#ifdef __APPLE__
++      extensionNames.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
++      instanceFlags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
++#endif
++
+       VkInstanceCreateInfo info = { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
++      info.flags                    = instanceFlags;
+       info.pApplicationInfo         = &appInfo;
+       info.enabledLayerCount        = layerNames.size();
+       info.ppEnabledLayerNames      = layerNames.data();
+diff --git a/src/util/util_env.cpp b/src/util/util_env.cpp
+index 556327c..cb46ecc 100644
+--- a/src/util/util_env.cpp
++++ b/src/util/util_env.cpp
+@@ -10,6 +10,10 @@
+ #include <sys/sysctl.h>
+ #include <unistd.h>
+ #include <limits.h>
++#elif defined(__APPLE__)
++#include <mach-o/dyld.h>
++#include <unistd.h>
++#include <limits.h>
+ #endif
+ 
+ #include "util_env.h"
+@@ -113,6 +117,19 @@ namespace dxvk::env {
+     }
+ 
+     return std::string(exePath);
++#elif defined(__APPLE__)
++    // Darwin has neither /proc/self/exe nor KERN_PROC_PATHNAME. Without a branch
++    // here the function falls off the end, and clang turns that into a trap that
++    // fires on the first Direct3DCreate9.
++    std::array<char, PATH_MAX> exePath = {};
++    uint32_t size = exePath.size();
++
++    if (_NSGetExecutablePath(exePath.data(), &size) != 0)
++      return "";
++
++    return std::string(exePath.data());
++#else
++    return "";
+ #endif
+   }
+   
+@@ -133,6 +150,13 @@ namespace dxvk::env {
+ 
+       SetThreadDescription(::GetCurrentThread(), wideName.data());
+     }
++#elif defined(__APPLE__)
++    // Apple's pthread_setname_np can only name the calling thread, so it takes
++    // just the name. setThreadName is only ever called from the thread being
++    // named, so nothing is lost.
++    std::array<char, 16> posixName = {};
++    dxvk::str::strlcpy(posixName.data(), name.c_str(), 16);
++    ::pthread_setname_np(posixName.data());
+ #else
+     std::array<char, 16> posixName = {};
+     dxvk::str::strlcpy(posixName.data(), name.c_str(), 16);
+diff --git a/src/util/util_win32_compat.h b/src/util/util_win32_compat.h
+index b706dca..b19b6db 100644
+--- a/src/util/util_win32_compat.h
++++ b/src/util/util_win32_compat.h
+@@ -1,6 +1,8 @@
+ #pragma once
+ 
+-#if defined(__unix__)
++// Apple's clang does not define __unix__, so Darwin needs naming here too - it is
++// as POSIX as any other native target for the purposes of dlopen and friends.
++#if defined(__unix__) || defined(__APPLE__)
+ 
+ #include <windows.h>
+ #include <dlfcn.h>
+diff --git a/src/vulkan/vulkan_loader.cpp b/src/vulkan/vulkan_loader.cpp
+index f9d1e98..d476b35 100644
+--- a/src/vulkan/vulkan_loader.cpp
++++ b/src/vulkan/vulkan_loader.cpp
+@@ -14,6 +14,9 @@ namespace dxvk::vk {
+ #ifdef _WIN32
+       "winevulkan.dll",
+       "vulkan-1.dll",
++#elif defined(__APPLE__)
++      "libvulkan.dylib",
++      "libvulkan.1.dylib",
+ #else
+       "libvulkan.so",
+       "libvulkan.so.1",

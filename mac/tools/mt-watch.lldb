@@ -1,0 +1,17 @@
+# Catch whoever writes into the script memory tree's free space.
+#
+# The watched node is filled with 0xAB poison whenever it is free. Stop only on a
+# write that leaves it holding something else while it is still free: that skips
+# the allocator's own poison fills and tree links, and skips the legitimate first
+# use after the node is handed out.
+#
+# Stop on the first allocation rather than on Com_Init: MT_Init runs inside
+# Com_Init and publishes the address, so arming any earlier watches address zero.
+breakpoint set --name MT_AllocIndex
+run
+breakpoint delete 1
+watchpoint set expression -w write -s 1 -- g_mtFreeSpaceWatch + 4
+watchpoint modify -c 'g_mtWatchNodeIsFree && *(g_mtFreeSpaceWatch + 4) != 0xAB'
+continue
+bt
+quit

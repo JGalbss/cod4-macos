@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>English</string>
+    <key>CFBundleDisplayName</key>
+    <string>jgalbs cod4</string>
+    <key>CFBundleExecutable</key>
+    <string>jgalbs cod4</string>
+    <key>CFBundleIconFile</key>
+    <string>jgalbs-cod4.icns</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.joshgalbreath.jgalbs-cod4</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>jgalbs cod4</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>SUFeedURL</key>
+    <string>https://github.com/JGalbss/cod4-macos/releases/latest/download/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>nutEu9Wa4l+IIxam+qyKrHAfgjLrmiSKMPo5JxQFqLc=</string>
+    <key>SURequireSignedFeed</key>
+    <true/>
+    <key>SUVerifyUpdateBeforeExtraction</key>
+    <true/>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUAutomaticallyUpdate</key>
+    <false/>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.games</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>15.5</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>jgalbs cod4 uses the microphone for in-game voice chat when you enable push-to-talk.</string>
+	<key>NSSupportsAutomaticGraphicsSwitching</key>
+	<false/>
+</dict>
+</plist>

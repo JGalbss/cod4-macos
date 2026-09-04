@@ -1,0 +1,47 @@
+name: Bug report
+description: Report a problem in the port
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Issues about the upstream Windows build belong in
+        [SwagSoftware/KisakCOD](https://github.com/SwagSoftware/KisakCOD/issues).
+        This tracker is specific to the Switch / macOS / Linux port.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS (ARM64)
+        - macOS (x86_64)
+        - Linux (ARM64)
+        - Linux (x86_64)
+        - Nintendo Switch (hardware)
+        - Nintendo Switch (Ryujinx/Yuzu)
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit / branch
+      placeholder: "e.g. port/switch @ abc1234"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs observed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / stack trace
+      render: shell
