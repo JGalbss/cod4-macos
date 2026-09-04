@@ -1,4 +1,4 @@
-// Decode the top level of a CoD IWI6 BC1 cubemap or BC3 2D image into PPM.
+// Decode the top level of a CoD IWI6 BC1, BC2, or BC3 image into PPM.
 // This is a renderer-porting diagnostic, intentionally dependency-free.
 
 #include <array>
@@ -106,18 +106,19 @@ int main(const int argc, char **argv)
     const bool bc1Cube = header.format == 0xB && (header.flags & (1u << 2)) != 0
         && header.dimensions[0] == header.dimensions[1];
     const bool bc1Image = header.format == 0xB && (header.flags & (1u << 2)) == 0;
-    const bool bc3Image = header.format == 0xC && (header.flags & (1u << 2)) == 0;
+    const bool bc2Image = header.format == 0xC && (header.flags & (1u << 2)) == 0;
+    const bool bc3Image = header.format == 0xD && (header.flags & (1u << 2)) == 0;
     if (!headerRead || std::memcmp(version, "IWi", 3) != 0 || version[3] != 6
-        || (!bc1Cube && !bc1Image && !bc3Image))
+        || (!bc1Cube && !bc1Image && !bc2Image && !bc3Image))
     {
         std::fclose(input);
-        std::fprintf(stderr, "unsupported IWI (need IWI6 BC1 or BC3)\n");
+        std::fprintf(stderr, "unsupported IWI (need IWI6 BC1, BC2, or BC3)\n");
         return 4;
     }
     const unsigned width = header.dimensions[0];
     const unsigned height = header.dimensions[1];
     const unsigned faceCount = bc1Cube ? 6 : 1;
-    const unsigned blockBytes = bc3Image ? 16 : 8;
+    const unsigned blockBytes = (bc2Image || bc3Image) ? 16 : 8;
     const size_t faceBytes = static_cast<size_t>(width / 4) * (height / 4) * blockBytes;
     std::vector<uint8_t> compressed(faceBytes * faceCount);
     // Image_LoadDxtc consumes external IWI cubemaps mip-major, from the

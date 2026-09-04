@@ -6221,6 +6221,7 @@ struct WorldOut {
     float3 tangent;
     float binormalSign;
     float clipW;
+    float4 screenLookup;
     float4 tangentClip;
     float4 bitangentClip;
 };
@@ -6238,6 +6239,13 @@ vertex WorldOut world_vertex(const device WorldVertex *vertices [[buffer(0)]],
     out.tangent = normalize(float3(vertices[id].tangent));
     out.binormalSign = vertices[id].binormalSign;
     out.clipW = out.position.w;
+    // D3D's clipSpaceLookupScale/Offset path is emitted per vertex and then
+    // perspective-interpolated.  Keep that projective coordinate explicitly;
+    // fragment [[position]] is a post-viewport value and is not interchangeable
+    // for these legacy screen-space material shaders.
+    out.screenLookup = float4(0.5 * out.position.x + 0.5 * out.position.w,
+                              -0.5 * out.position.y + 0.5 * out.position.w,
+                              0.0, out.position.w);
     out.tangentClip = viewProjection * float4(out.tangent, 0.0);
     float3 bitangent = normalize(cross(out.normal, out.tangent)) * out.binormalSign;
     out.bitangentClip = viewProjection * float4(bitangent, 0.0);
@@ -6258,6 +6266,9 @@ vertex WorldOut model_vertex(const device WorldVertex *vertices [[buffer(0)]],
     out.tangent = normalize((model * float4(float3(vertices[id].tangent), 0.0)).xyz);
     out.binormalSign = vertices[id].binormalSign;
     out.clipW = out.position.w;
+    out.screenLookup = float4(0.5 * out.position.x + 0.5 * out.position.w,
+                              -0.5 * out.position.y + 0.5 * out.position.w,
+                              0.0, out.position.w);
     out.tangentClip = viewProjection * float4(out.tangent, 0.0);
     float3 bitangent = normalize(cross(out.normal, out.tangent)) * out.binormalSign;
     out.bitangentClip = viewProjection * float4(bitangent, 0.0);
@@ -6646,20 +6657,35 @@ fragment float4 effect_fragment(WorldOut in [[stage_in]],
                                       filter::linear);
     constexpr sampler depthSampler(coord::normalized, address::clamp_to_edge,
                                    filter::nearest);
-    float2 screenUv = in.position.xy * effect.viewportInvSize;
+    float lookupBaseW = abs(in.screenLookup.w) >= 0.000001
+        ? in.screenLookup.w
+        : (in.screenLookup.w < 0.0 ? -0.000001 : 0.000001);
+    float2 screenUv = in.screenLookup.xy / lookupBaseW
+                    + 0.5 * effect.viewportInvSize;
     if ((effect.flags & 2u) != 0u) {
         float4 distortion = tex.sample(smp, in.uv);
         float2 signedDistortion = distortion.rg * 2.0 - 1.0;
-        float inverseClipW = 1.0 / max(abs(in.clipW), 0.000001);
-        // This is the native form of IW3's distortion_scale_zfeather vertex
-        // shader: project the sprite tangent/binormal into lookup space, then
-        // use the normal map's red/green pair to perturb resolvedPostSun.
-        float2 tangentOffset = 0.5 * in.tangentClip.xy * inverseClipW
+        // Preserve the projective W terms emitted by IW3's
+        // distortion_scale_zfeather_dtex vertex shader.  Dividing each basis
+        // vector by the unperturbed W first is only an affine approximation;
+        // for nearby explosion cards it can drive the lookup across most of
+        // the framebuffer, producing blue patches and giant scene-colored
+        // polygons.  The original shader adds both homogeneous offsets and
+        // performs one texldp divide afterwards.
+        float4 distortedLookup = in.screenLookup;
+        distortedLookup.xy += 0.5 * effect.viewportInvSize * distortedLookup.w;
+        float4 tangentLookup = float4(0.5 * in.tangentClip.xy,
+                                     0.0, in.tangentClip.w)
                              * effect.distortionScale.x * in.color.r;
-        float2 bitangentOffset = -0.5 * in.bitangentClip.xy * inverseClipW
+        float4 bitangentLookup = float4(-0.5 * in.bitangentClip.xy,
+                                       0.0, -in.bitangentClip.w)
                                * effect.distortionScale.y * in.color.g;
-        float2 distortedUv = screenUv + signedDistortion.x * tangentOffset
-                                      + signedDistortion.y * bitangentOffset;
+        distortedLookup += signedDistortion.x * tangentLookup
+                         + signedDistortion.y * bitangentLookup;
+        float lookupW = abs(distortedLookup.w) >= 0.000001
+            ? distortedLookup.w
+            : (distortedLookup.w < 0.0 ? -0.000001 : 0.000001);
+        float2 distortedUv = distortedLookup.xy / lookupW;
         float distortedDepth = resolvedDepth.sample(depthSampler, distortedUv);
         float2 chosenUv = distortedDepth + 0.000001 >= in.position.z
             ? distortedUv : screenUv;
