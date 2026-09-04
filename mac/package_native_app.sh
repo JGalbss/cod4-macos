@@ -178,6 +178,29 @@ if [[ -s "${dependency_leaks}" ]]; then
     cat "${dependency_leaks}" >&2
     exit 1
 fi
+
+# Load commands are not the only way a local path can escape. Compiler debug
+# metadata and __FILE__ expansions can preserve the checkout directory inside
+# a Mach-O even after its rpaths are clean. Reject common macOS build roots in
+# every bundled executable/framework so a public package cannot disclose or
+# depend on the build host's filesystem layout.
+build_path_leaks="${stage_dir}/build-path-leaks.txt"
+: >"${build_path_leaks}"
+while IFS= read -r -d '' candidate; do
+    file "${candidate}" | grep -q 'Mach-O' || continue
+    strings -a "${candidate}" | awk -v binary="${candidate}" '
+        (/^\/(Users|Volumes|tmp|var\/folders)\// ||
+         /^\/private\/(tmp|var)\// ||
+         /^\/opt\/homebrew\// ||
+         /^\/usr\/local\//) && $0 !~ /XXXXXX/ {
+            print binary ": " $0
+        }' >>"${build_path_leaks}"
+done < <(find "${stage_app}" -type f -print0)
+if [[ -s "${build_path_leaks}" ]]; then
+    print -u2 "Package still embeds build-machine paths:"
+    cat "${build_path_leaks}" >&2
+    exit 1
+fi
 "${repo_dir}/mac/tools/verify-bundled-sdl.zsh" "${stage_app}"
 
 # Ad-hoc signing makes local/test builds internally consistent. A public build

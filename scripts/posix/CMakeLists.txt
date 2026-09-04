@@ -13,6 +13,19 @@ find_package(glm CONFIG REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(CURL REQUIRED)
 
+# Keep compiler-generated diagnostics and debug metadata independent of the
+# checkout location. Some upstream ODE assertions expand __FILE__ into the
+# executable, so stripping debug symbols alone cannot remove the build host's
+# absolute source path.
+add_compile_options(
+    $<$<COMPILE_LANG_AND_ID:C,Clang,AppleClang,GNU>:-ffile-prefix-map=${CMAKE_SOURCE_DIR}=cod4-macos>
+    $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang,GNU>:-ffile-prefix-map=${CMAKE_SOURCE_DIR}=cod4-macos>
+    $<$<COMPILE_LANG_AND_ID:OBJCXX,Clang,AppleClang,GNU>:-ffile-prefix-map=${CMAKE_SOURCE_DIR}=cod4-macos>
+    $<$<COMPILE_LANG_AND_ID:C,Clang,AppleClang,GNU>:-ffile-prefix-map=${CMAKE_BINARY_DIR}=build>
+    $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang,GNU>:-ffile-prefix-map=${CMAKE_BINARY_DIR}=build>
+    $<$<COMPILE_LANG_AND_ID:OBJCXX,Clang,AppleClang,GNU>:-ffile-prefix-map=${CMAKE_BINARY_DIR}=build>
+)
+
 set(SPEEX_CODEC_SOURCES
     "${SRC_DIR}/groupvoice/speex/nb_celp.c"
     "${SRC_DIR}/groupvoice/speex/sb_celp.c"

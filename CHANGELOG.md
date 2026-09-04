@@ -38,6 +38,8 @@ No changes are currently queued beyond the 0.2.0 release candidate.
   semantics used by explosions and other translucent effects.
 - Removed absolute build-machine runtime paths from packaged applications and
   made DMG installation verify its SHA-256 sidecar before mounting.
+- Normalized compiler source/debug paths and made packaging reject embedded
+  checkout or temporary-build paths in every bundled Mach-O.
 
 ## 0.1.0 source baseline - 2026-09-04
 

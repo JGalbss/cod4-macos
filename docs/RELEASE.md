@@ -69,8 +69,9 @@ file 'bin/posix/jgalbs cod4'
 ## 3. Build a local package
 
 With no signing variables, the script produces an ad-hoc-signed development
-bundle. It embeds runtime libraries, removes build-machine Homebrew paths,
-adds license/source notices, creates the DMG, and writes its checksum.
+bundle. It embeds runtime libraries, removes build-machine dependency and
+compiler paths, adds license/source notices, creates the DMG, and writes its
+checksum.
 Development packages keep manual **Check for Updates…** available but disable
 scheduled checks so they do not poll a production feed before one is live.
 The public source export intentionally has no application mark: provide a

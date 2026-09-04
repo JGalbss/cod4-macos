@@ -63,8 +63,9 @@ complete compatibility. Results below were observed during development through
   `/tmp/cod4-packaged-smoke.3EJMt5`.
 - Package validation passed for the embedded Sparkle updater, the pinned SDL2
   compatibility library loading the app-local SDL3 runtime, ad-hoc code-signing
-  structure, the DMG checksum, and `hdiutil verify`. The pinned runtime build is
-  documented in the [SDL runtime guide](../mac/sdl2/README.md).
+  structure, removal of runtime and compiler build-machine paths, the DMG
+  checksum, and `hdiutil verify`. The pinned runtime build is documented in the
+  [SDL runtime guide](../mac/sdl2/README.md).
 - The car-effect audit found no missing asset. The observed car debris and
   shellshock are authored effects, not a missing-resource fallback.
 
