@@ -526,7 +526,7 @@ void __cdecl FS_FCloseFile(int h)
         f = FS_FileForHandle(h);
         FS_FileClose(f);
     }
-    Com_Memset((unsigned int *)&fsh[h], 0, 284);
+    Com_Memset(&fsh[h], 0, sizeof(fsh[h]));
 }
 
 void __cdecl FS_FCloseLogFile(int h)
@@ -948,7 +948,7 @@ unsigned int __cdecl FS_FOpenFileReadForThread(const char *filename, int *file, 
     filetemp = zfi->file;
     ziptemp = zfi->pfile_in_zip_read;
     unzSetCurrentFileInfoPosition(iwd->handle, iwdFile->pos);
-    Com_Memcpy((char *)zfi, (char *)iwd->handle, 128);
+    Com_Memcpy(zfi, iwd->handle, sizeof(*zfi));
     zfi->file = filetemp;
     zfi->pfile_in_zip_read = ziptemp;
     unzOpenCurrentFile(fsh[*file].handleFiles.file.z);
@@ -1875,22 +1875,22 @@ void __cdecl FS_SortFileList(const char **filelist, int numfiles)
     int k; // [esp+8h] [ebp-10h]
     int numsortedfiles; // [esp+Ch] [ebp-Ch]
     int i; // [esp+10h] [ebp-8h]
-    char *sortedlist; // [esp+14h] [ebp-4h]
+    const char **sortedlist;
 
-    sortedlist = (char*)Z_Malloc(4 * numfiles + 4, "FS_SortFileList", 3);
-    *(_DWORD *)sortedlist = 0;
+    sortedlist = (const char **)Z_Malloc(sizeof(*sortedlist) * (numfiles + 1), "FS_SortFileList", 3);
+    sortedlist[0] = nullptr;
     numsortedfiles = 0;
     for (i = 0; i < numfiles; ++i)
     {
-        for (j = 0; j < numsortedfiles && FS_PathCmp(filelist[i], *(const char **)&sortedlist[4 * j]) >= 0; ++j)
+        for (j = 0; j < numsortedfiles && FS_PathCmp(filelist[i], sortedlist[j]) >= 0; ++j)
             ;
         for (k = numsortedfiles; k > j; --k)
-            *(_DWORD *)&sortedlist[4 * k] = *(_DWORD *)&sortedlist[4 * k - 4];
-        *(_DWORD *)&sortedlist[4 * j] = (_DWORD)(uintptr_t)filelist[i]; // KISAKTODO: probably cooked
+            sortedlist[k] = sortedlist[k - 1];
+        sortedlist[j] = filelist[i];
         ++numsortedfiles;
     }
-    Com_Memcpy(filelist, sortedlist, 4 * numfiles);
-    Z_Free(sortedlist, 3);
+    Com_Memcpy(filelist, sortedlist, sizeof(*sortedlist) * numfiles);
+    Z_Free((void *)sortedlist, 3);
 }
 
 void __cdecl FS_NewDir_f()

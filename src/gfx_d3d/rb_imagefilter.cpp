@@ -183,7 +183,7 @@ int __cdecl RB_PickSymmetricFilterMaterial(int halfTapCount, const Material **ma
             "%s\n\t(halfTapCount) = %i",
             "(halfTapCount > 0 && halfTapCount <= 8)",
             halfTapCount);
-    *material = (const Material *)(uintptr_t)*((unsigned int *)&rgp.postFxMaterial + halfTapCount);
+    *material = rgp.symmetricFilterMaterial[halfTapCount - 1];
     return halfTapCount;
 }
 
@@ -477,4 +477,3 @@ GfxRenderTargetId __cdecl RB_ApplyGlowFilter(
     RB_FilterImage(&filter);
     return dstRenderTarget;
 }
-

@@ -504,9 +504,9 @@ void  Scr_CheckLeaks(void);
 
 int  ThreadInfoCompare(_DWORD* info1, _DWORD* info2);
 //int  VariableInfoCompare(void const*, void const*);
-int VariableInfoFileNameCompare(_DWORD* info1, _DWORD* info2);
-int VariableInfoCountCompare(_DWORD* info1, _DWORD* info2);
-int VariableInfoFileLineCompare(_DWORD* info1, _DWORD* info2);
+int VariableInfoFileNameCompare(const void *rawInfo1, const void *rawInfo2);
+int VariableInfoCountCompare(const void *rawInfo1, const void *rawInfo2);
+int VariableInfoFileLineCompare(const void *rawInfo1, const void *rawInfo2);
 unsigned int  FindVariableIndexInternal2(unsigned int name, unsigned int index);
 unsigned int FindVariableIndexInternal(unsigned int parentId, unsigned int name);
 unsigned short  AllocVariable(void);

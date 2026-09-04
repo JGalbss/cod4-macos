@@ -107,6 +107,13 @@ void QueueSdlEvent(const SDL_Event &event)
         const int keyNum = KeyNumForKeycode(event.key.keysym.sym);
         if (keyNum)
             Push(SE_KEY, keyNum, event.type == SDL_KEYDOWN);
+
+        // SDL text input deliberately excludes editing keys.  CoD4's menu text
+        // fields, however, consume Backspace through the character-event path
+        // (the same way the Win32 message pump delivered ASCII 8), while the
+        // console and bindings still need the regular key event above.
+        if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_BACKSPACE)
+            Push(SE_CHAR, '\b', 0);
         break;
     }
 

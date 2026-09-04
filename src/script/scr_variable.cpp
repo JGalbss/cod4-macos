@@ -39,20 +39,20 @@ scr_classStruct_t g_classMap[4] =
 #define FACTOR101 1
 #endif
 
-int  VariableInfoFunctionCompare(void *p_info1, void *p_info2)
+int VariableInfoFunctionCompare(const void *p_info1, const void *p_info2)
 {
 	const char *functionName2; // [esp+0h] [ebp-Ch]
 	const char *functionName1; // [esp+4h] [ebp-8h]
 	int fileNameCompare; // [esp+8h] [ebp-4h]
 
-	_DWORD *info1 = (_DWORD *)p_info1;
-	_DWORD *info2 = (_DWORD *)p_info2;
+	const VariableDebugInfo *info1 = static_cast<const VariableDebugInfo *>(p_info1);
+	const VariableDebugInfo *info2 = static_cast<const VariableDebugInfo *>(p_info2);
 
 	fileNameCompare = VariableInfoFileNameCompare(info1, info2);
 	if (fileNameCompare)
 		return fileNameCompare;
-	functionName1 = (const char *)(uintptr_t)info1[2];
-	functionName2 = (const char *)(uintptr_t)info2[2];
+	functionName1 = info1->functionName;
+	functionName2 = info2->functionName;
 	if (!functionName1)
 		return 1;
 	if (functionName2)
@@ -63,6 +63,15 @@ int  VariableInfoFunctionCompare(void *p_info1, void *p_info2)
 int __cdecl CompareThreadIndices(unsigned int *arg1, unsigned int *arg2)
 {
 	return *arg1 - *arg2;
+}
+
+static int VariableInfoPositionCompare(const void *rawInfo1, const void *rawInfo2)
+{
+	const VariableDebugInfo *info1 = static_cast<const VariableDebugInfo *>(rawInfo1);
+	const VariableDebugInfo *info2 = static_cast<const VariableDebugInfo *>(rawInfo2);
+	const uintptr_t pos1 = reinterpret_cast<uintptr_t>(info1->pos);
+	const uintptr_t pos2 = reinterpret_cast<uintptr_t>(info2->pos);
+	return (pos1 > pos2) - (pos1 < pos2);
 }
 
 void __cdecl Scr_Cleanup()
@@ -99,7 +108,7 @@ void Scr_InitVariables()
 	scrVarPub.numScriptObjects = 0;
 
 	if (scrVarDebugPub)
-		memset(scrVarDebugPub, 0, 0x60000u);
+		memset(scrVarDebugPub, 0, sizeof(*scrVarDebugPub));
 
 	Scr_InitVariableRange(VARIABLELIST_PARENT_BEGIN, VARIABLELIST_PARENT_SIZE + 1);
 	Scr_InitVariableRange(VARIABLELIST_CHILD_BEGIN, 0x18000u);
@@ -1211,7 +1220,7 @@ void  Scr_DumpScriptVariables(bool spreadsheet,
 	if (scrVarDebugPub
 		&& (scrVarPub.developer || (!spreadsheet && !fileName && !functionName && !lineSort && !functionSummary && !minCount)))
 	{
-		infoArray = (VariableDebugInfo*)Z_TryVirtualAlloc(1572864, "Scr_DumpScriptVariables", 0);
+		infoArray = (VariableDebugInfo*)Z_TryVirtualAlloc(sizeof(*infoArray) * 0x18000, "Scr_DumpScriptVariables", 0);
 		if (infoArray)
 		{
 			num = 0;
@@ -1247,17 +1256,17 @@ void  Scr_DumpScriptVariables(bool spreadsheet,
 				if (summary)
 				{
 					VariableInfoCompareCallBack = (int(*)(const void *, const void *))VariableInfoFileNameCompare;
-					qsort(infoArray, num, 0x10u, (int(*)(const void *, const void *))VariableInfoFileNameCompare);
+					qsort(infoArray, num, sizeof(*infoArray), VariableInfoFileNameCompare);
 				}
 				else if (functionSummary)
 				{
 					VariableInfoCompareCallBack = (int(*)(const void *, const void *))VariableInfoFunctionCompare;
-					qsort(infoArray, num, 0x10u, (int(*)(const void *, const void *))VariableInfoFunctionCompare);
+					qsort(infoArray, num, sizeof(*infoArray), VariableInfoFunctionCompare);
 				}
 				else
 				{
-					VariableInfoCompareCallBack = (int(*)(const void *, const void *))CompareThreadIndices;
-					qsort(infoArray, num, 0x10u, (int(*)(const void *, const void *))CompareThreadIndices);
+					VariableInfoCompareCallBack = VariableInfoPositionCompare;
+					qsort(infoArray, num, sizeof(*infoArray), VariableInfoPositionCompare);
 				}
 				i = 0;
 				while (i < num)
@@ -1270,9 +1279,9 @@ void  Scr_DumpScriptVariables(bool spreadsheet,
 					} while (i < num && !VariableInfoCompareCallBack(pInfoa, &infoArray[i]));
 				}
 				if (lineSort)
-					qsort(infoArray, num, 0x10u, (int(*)(const void *, const void *))VariableInfoFileLineCompare);
+					qsort(infoArray, num, sizeof(*infoArray), VariableInfoFileLineCompare);
 				else
-					qsort(infoArray, num, 0x10u, (int(*)(const void *, const void *))VariableInfoCountCompare);
+					qsort(infoArray, num, sizeof(*infoArray), VariableInfoCountCompare);
 				Com_Printf(23, "********************************\n");
 				if (spreadsheet)
 				{
@@ -2354,6 +2363,28 @@ void  Scr_FreeGameVariable(int bComplete)
 	}
 }
 
+static int CompareThreadDebugInfo(const ThreadDebugInfo *info1, const ThreadDebugInfo *info2)
+{
+	for (int i = 0; ; ++i)
+	{
+		if (i >= info1->posSize || i >= info2->posSize)
+			return info1->posSize - info2->posSize;
+		if (info1->pos[i] != info2->pos[i])
+		{
+			return reinterpret_cast<uintptr_t>(info1->pos[i]) < reinterpret_cast<uintptr_t>(info2->pos[i])
+				? -1
+				: 1;
+		}
+	}
+}
+
+static int CompareThreadDebugInfoForQsort(const void *rawInfo1, const void *rawInfo2)
+{
+	return CompareThreadDebugInfo(
+		reinterpret_cast<const ThreadDebugInfo *>(rawInfo1),
+		reinterpret_cast<const ThreadDebugInfo *>(rawInfo2));
+}
+
 void Scr_DumpScriptThreads(void)
 {
 	double ThreadUsage; // st7
@@ -2390,7 +2421,7 @@ void Scr_DumpScriptThreads(void)
 	}
 	if (num)
 	{
-		infoArray = (ThreadDebugInfo*)Z_TryVirtualAlloc(140 * num, "Scr_DumpScriptThreads", 0);
+		infoArray = (ThreadDebugInfo*)Z_TryVirtualAlloc(sizeof(ThreadDebugInfo) * num, "Scr_DumpScriptThreads", 0);
 		if (infoArray)
 		{
 			num = 0;
@@ -2422,7 +2453,7 @@ void Scr_DumpScriptThreads(void)
 						pInfo->pos[j] = info.pos[info.posSize - j];
 				}
 			}
-			qsort(infoArray, num, 0x8Cu, (int(*)(const void*, const void*))ThreadInfoCompare);
+			qsort(infoArray, num, sizeof(ThreadDebugInfo), CompareThreadDebugInfoForQsort);
 			Com_Printf(23, "********************************\n");
 			varUsage = 0.0;
 			endonUsage = 0.0;
@@ -2438,7 +2469,7 @@ void Scr_DumpScriptThreads(void)
 					++count;
 					info.varUsage = info.varUsage + infoArray[i].varUsage;
 					info.endonUsage = info.endonUsage + infoArray[i++].endonUsage;
-				} while (i < num && !ThreadInfoCompare((uint32*)pInfo, (uint32*)&infoArray[i]));
+				} while (i < num && !CompareThreadDebugInfo(pInfo, &infoArray[i]));
 				varUsage = varUsage + info.varUsage;
 				endonUsage = endonUsage + info.endonUsage;
 				Com_Printf(23, "count: %d, var usage: %d, endon usage: %d\n", count, (int)info.varUsage, (int)info.endonUsage);
@@ -3257,31 +3288,22 @@ void  Scr_CheckLeaks(void)
 	}
 }
 
-int  ThreadInfoCompare(_DWORD* info1, _DWORD* info2)
+int ThreadInfoCompare(_DWORD* rawInfo1, _DWORD* rawInfo2)
 {
-	const char* pos1; // [esp+0h] [ebp-Ch]
-	int i; // [esp+4h] [ebp-8h]
-	const char* pos2; // [esp+8h] [ebp-4h]
-
-	for (i = 0; ; ++i)
-	{
-		if (static_cast<uint32>(i) >= info1[32] || static_cast<uint32>(i) >= info2[32])
-			return static_cast<int>(info1[32]) - static_cast<int>(info2[32]);
-		pos1 = (const char*)(uintptr_t)info1[i];
-		pos2 = (const char*)(uintptr_t)info2[i];
-		if (pos1 != pos2)
-			break;
-	}
-	return pos1 - pos2;
+	const ThreadDebugInfo *info1 = reinterpret_cast<const ThreadDebugInfo *>(rawInfo1);
+	const ThreadDebugInfo *info2 = reinterpret_cast<const ThreadDebugInfo *>(rawInfo2);
+	return CompareThreadDebugInfo(info1, info2);
 }
 
-int VariableInfoFileNameCompare(_DWORD* info1, _DWORD* info2)
+int VariableInfoFileNameCompare(const void *rawInfo1, const void *rawInfo2)
 {
 	const char* fileName1; // [esp+0h] [ebp-8h]
 	const char* fileName2; // [esp+4h] [ebp-4h]
 
-	fileName1 = (const char*)(uintptr_t)info1[1];
-	fileName2 = (const char*)(uintptr_t)info2[1];
+	const VariableDebugInfo *info1 = static_cast<const VariableDebugInfo *>(rawInfo1);
+	const VariableDebugInfo *info2 = static_cast<const VariableDebugInfo *>(rawInfo2);
+	fileName1 = info1->fileName;
+	fileName2 = info2->fileName;
 	if (!fileName1)
 		return 1;
 	if (fileName2)
@@ -3289,20 +3311,21 @@ int VariableInfoFileNameCompare(_DWORD* info1, _DWORD* info2)
 	return -1;
 }
 
-int VariableInfoCountCompare(_DWORD* info1, _DWORD* info2)
+int VariableInfoCountCompare(const void *rawInfo1, const void *rawInfo2)
 {
-	return info1[3] - info2[3];
+	const VariableDebugInfo *info1 = static_cast<const VariableDebugInfo *>(rawInfo1);
+	const VariableDebugInfo *info2 = static_cast<const VariableDebugInfo *>(rawInfo2);
+	return info1->varUsage - info2->varUsage;
 }
 
-int __cdecl VariableInfoFileLineCompare(_DWORD* info1, _DWORD* info2)
+int __cdecl VariableInfoFileLineCompare(const void *rawInfo1, const void *rawInfo2)
 {
 	int fileCompare; // [esp+0h] [ebp-4h]
 
-	fileCompare = VariableInfoFileNameCompare(info1, info2);
+	fileCompare = VariableInfoFileNameCompare(rawInfo1, rawInfo2);
 	if (fileCompare)
 		return fileCompare;
-	else
-		return CompareThreadIndices((unsigned int*)info1, (unsigned int*)info2);
+	return VariableInfoPositionCompare(rawInfo1, rawInfo2);
 }
 
 unsigned int  FindVariableIndexInternal2(unsigned int name, unsigned int index)
@@ -3617,7 +3640,7 @@ void  Scr_AddFieldsForFile(char const* filename)
 	char* v5; // [esp+8h] [ebp-98h]
 	char* v6; // [esp+Ch] [ebp-94h]
 	int v7; // [esp+10h] [ebp-90h]
-	int tempType[2]; // [esp+78h] [ebp-28h] BYREF
+	int tempType; // [esp+78h] [ebp-28h] BYREF
 	int len; // [esp+80h] [ebp-20h]
 	[[maybe_unused]] int size; // [esp+84h] [ebp-1Ch]
 	char* targetPos; // [esp+88h] [ebp-18h]
@@ -3632,7 +3655,6 @@ void  Scr_AddFieldsForFile(char const* filename)
 		SourceFile_FastFile_DONE = (const char*)Scr_GetSourceFile_FastFile(filename);
 	else
 		SourceFile_FastFile_DONE = Scr_GetSourceFile_LoadObj(filename);
-	tempType[1] = (int)(uintptr_t)SourceFile_FastFile_DONE;
 	sourcePos = SourceFile_FastFile_DONE;
 	Com_BeginParseSession("Scr_AddFields");
 	for (targetPos = TempMalloc(0); ; *targetPos = 0)
@@ -3673,7 +3695,7 @@ void  Scr_AddFieldsForFile(char const* filename)
 		for (i = v7; i >= 0; --i)
 			token[i] = tolower(token[i]);
 		index = SL_GetCanonicalString(token);
-		if (Scr_FindField(token, tempType))
+		if (Scr_FindField(token, &tempType))
 			Com_Error(ERR_DROP, "duplicate key %s in %s", token, filename);
 		TempMemorySetPos(targetPos);
 		size = len + 4;

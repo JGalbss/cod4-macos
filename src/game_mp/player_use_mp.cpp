@@ -12,9 +12,11 @@
 #include <server/sv_game.h>
 #include <server/sv_world.h>
 
-int32_t __cdecl compare_use(float *pe1, float *pe2)
+int32_t __cdecl compare_use(const void *pe1, const void *pe2)
 {
-    return (int)(pe1[1] - pe2[1]);
+    const useList_t *use1 = static_cast<const useList_t *>(pe1);
+    const useList_t *use2 = static_cast<const useList_t *>(pe2);
+    return static_cast<int32_t>(use1->score - use2->score);
 }
 
 void __cdecl Player_UpdateActivate(gentity_s *ent)
@@ -421,7 +423,7 @@ int32_t __cdecl Player_GetUseList(gentity_s *ent, useList_t *useList, int32_t pr
             }
         }
     }
-    qsort(useList, num, 8u, (int(__cdecl *)(const void *, const void *))compare_use);
+    qsort(useList, num, sizeof(useList_t), compare_use);
     num -= v31;
     v28 = 0;
     for (i = 0; i < (int)num; ++i)
@@ -440,7 +442,7 @@ int32_t __cdecl Player_GetUseList(gentity_s *ent, useList_t *useList, int32_t pr
             }
         }
     }
-    qsort(useList, num, 8u, (int(__cdecl *)(const void *, const void *))compare_use);
+    qsort(useList, num, sizeof(useList_t), compare_use);
     return num - v28;
 }
 
@@ -527,4 +529,3 @@ void __cdecl Player_SetVehicleDropHint(gentity_s *ent)
     ps->ps.cursorHintEntIndex = ent->r.ownerNum.entnum();
     ent->r.ownerNum.ent()->flags |= FL_CURSOR_HINT;
 }
-

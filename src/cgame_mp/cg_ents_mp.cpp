@@ -389,19 +389,14 @@ void  CG_UpdateBModelWorldBounds(uint32_t localClientNum, centity_s *cent, int32
     v10 = Kisak_UnpackFloatHi(v14) * v64 + v10;
     v11 = Kisak_UnpackFloatLo(v15) * v65 + v11;
     rotatedBounds[0].v[0] = Kisak_UnpackFloatLo(v16) * v66 + rotatedBounds[0].v[0];
-    LODWORD(v8[7]) = (uintptr_t) &rotatedBounds[0].v[1];
     rotatedBounds[0].v[1] = Kisak_UnpackFloatLo(v39) * v73 + v59;
     rotatedBounds[0].v[2] = Kisak_UnpackFloatHi(v39) * v74 + v60;
     rotatedBounds[0].v[3] = Kisak_UnpackFloatLo(v40) * v75 + v61;
     rotatedBounds[1].v[0] = Kisak_UnpackFloatLo(v41) * v76 + v62;
-    LODWORD(v8[6]) = (uintptr_t) &rotatedBounds[0].v[1];
-    LODWORD(v8[5]) = (uintptr_t) &rotatedBounds[0].v[1];
     rotatedBounds[0].v[1] = Kisak_UnpackFloatLo(v25) * v68 + rotatedBounds[0].v[1];
     rotatedBounds[0].v[2] = Kisak_UnpackFloatHi(v25) * v69 + rotatedBounds[0].v[2];
     rotatedBounds[0].v[3] = Kisak_UnpackFloatLo(v26) * v70 + rotatedBounds[0].v[3];
     rotatedBounds[1].v[0] = Kisak_UnpackFloatLo(v27) * v71 + rotatedBounds[1].v[0];
-    LODWORD(v8[4]) = (uintptr_t) &rotatedBounds[0].v[1];
-    LODWORD(v8[3]) = (uintptr_t) &rotatedBounds[0].v[1];
     rotatedBounds[0].v[1] = rotatedBounds[1].v[1] * v63 + rotatedBounds[0].v[1];
     rotatedBounds[0].v[2] = rotatedBounds[1].v[2] * v64 + rotatedBounds[0].v[2];
     rotatedBounds[0].v[3] = rotatedBounds[1].v[3] * v65 + rotatedBounds[0].v[3];
@@ -1365,26 +1360,20 @@ void __cdecl CG_ClearUnion(int32_t localClientNum, centity_s *cent)
     switch (cent->pose.eTypeUnion)
     {
     case ET_PLAYER:
-        *(_QWORD_alias *)&cent->pose.player.control = 0;
-        cent->pose.turret.barrelPitch = 0.0;
+        cent->pose.player = {};
         break;
     case ET_FX:
     case ET_LOOP_FX:
         if (cent->pose.fx.effect)
             FX_ThroughWithEffect(localClientNum, cent->pose.fx.effect);
-        *(_QWORD_alias *)&cent->pose.player.control = 0;
+        cent->pose.fx = {};
         break;
     case ET_MG42:
-        *(_QWORD_alias *)&cent->pose.player.control = 0;
-        *((_QWORD_alias *)&cent->pose.fx + 1) = 0;
+        cent->pose.turret = {};
         break;
     case ET_HELICOPTER:
     case ET_VEHICLE:
-        *(_QWORD_alias *)&cent->pose.player.control = 0;
-        *((_QWORD_alias *)&cent->pose.fx + 1) = 0;
-        *((_QWORD_alias *)&cent->pose.fx + 2) = 0;
-        *((_QWORD_alias *)&cent->pose.fx + 3) = 0;
-        *((uint32_t *)&cent->pose.fx + 8) = 0;
+        cent->pose.vehicle = {};
         break;
     default:
         break;
@@ -1762,7 +1751,7 @@ void __cdecl CG_Fx(int32_t localClientNum, centity_s *cent)
             FX_AssertAllocatedEffect(localClientNum, cent->pose.fx.effect);
             FX_ThroughWithEffect(localClientNum, cent->pose.fx.effect);
         }
-        *(_QWORD_alias *)&cent->pose.player.control = 0;
+        cent->pose.fx = {};
         cent->pose.fx.effect = CG_StartFx(localClientNum, cent, cent->nextState.time2);
         if (cent->pose.fx.effect)
             cent->pose.fx.triggerTime = cent->nextState.time2;

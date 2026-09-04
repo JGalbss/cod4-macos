@@ -705,7 +705,7 @@ void __cdecl VehicleFXTest(int32_t localClientNum, const DObj_s *obj, centity_s 
                     axis[0][1] = 0.0;
                     axis[0][2] = 1.0;
                     Vec3Basis_RightHanded(axis[0], axis[1], axis[2]);
-                    if ((FxMarksSystem *)(uintptr_t)(trace.surfaceFlags & 0x1F00000) == (FxMarksSystem *)&fx_marksSystemPool[0].pointGroups[930].pointGroup.points[0].xyz[2])
+                    if ((trace.surfaceFlags & 0x1F00000) == 0x1400000)
                         fx = cgMedia.heliWaterEffect;
                     else
                         fx = cgMedia.heliDustEffect;
@@ -773,4 +773,3 @@ void __cdecl CG_Veh_Init()
 {
     memset((uint8_t *)vehEffects, 0, sizeof(vehEffects));
 }
-

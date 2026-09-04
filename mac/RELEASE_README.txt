@@ -20,8 +20,8 @@ Installation
 Drag jgalbs cod4.app to Applications, open it, and select the retail data directory
 when prompted.
 
-The New Experience server is added to Favorites automatically for a new
-profile. Existing Favorites lists are preserved.
+The jgalbs server is ensured in Favorites for fresh and upgraded profiles.
+Other saved Favorites are preserved and its address is not duplicated.
 
 Mod compatibility
 -----------------

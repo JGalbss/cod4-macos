@@ -611,7 +611,8 @@ SourceBufferInfo *__cdecl Scr_GetNewSourceBuffer()
         iassert(scrParserPub.sourceBufferLookupLen < scrParserGlob.sourceBufferLookupMaxLen);
 
         newSourceBufferInfo = (char *)Hunk_AllocDebugMem(sizeof(SourceBufferInfo) * scrParserGlob.sourceBufferLookupMaxLen);
-        Com_Memcpy(newSourceBufferInfo, (char *)scrParserPub.sourceBufferLookup, 44 * scrParserPub.sourceBufferLookupLen);
+        Com_Memcpy(newSourceBufferInfo, scrParserPub.sourceBufferLookup,
+                   sizeof(SourceBufferInfo) * scrParserPub.sourceBufferLookupLen);
         Hunk_FreeDebugMem();
         scrParserPub.sourceBufferLookup = (SourceBufferInfo *)newSourceBufferInfo;
     }
@@ -1260,8 +1261,6 @@ char __cdecl Scr_PrintProfileTimes(float minTime)
 {
     //OpcodeLookup *v2; // ecx
     //const char **v3; // edx
-    int v4; // [esp+34h] [ebp-A0h]
-    unsigned int v5; // [esp+38h] [ebp-9Ch]
     float v6; // [esp+3Ch] [ebp-98h]
     float v7; // [esp+44h] [ebp-90h]
     float v8; // [esp+4Ch] [ebp-88h]
@@ -1328,14 +1327,12 @@ char __cdecl Scr_PrintProfileTimes(float minTime)
         std::sort(sortedOpcodeLookup + 0, sortedOpcodeLookup + profileCount, Scr_CompareProfileTimes);
         Com_Printf(23, "\n");
         profile = Profile_GetScript();
-            maxNameLength = 0;
+        maxNameLength = 0;
         for (profileIndexa = 0; profileIndexa < 40; ++profileIndexa)
         {
-            v4 = (int)(uintptr_t)&profile->profileScriptNames[profileIndexa][1];
-            v5 = (unsigned int)(uintptr_t)&profile->profileScriptNames[profileIndexa][strlen(profile->profileScriptNames[profileIndexa])
-                + 1];
-            if (v5 - v4 > maxNameLength)
-                maxNameLength = v5 - v4;
+            const size_t nameLength = strlen(profile->profileScriptNames[profileIndexa]);
+            if (nameLength > maxNameLength)
+                maxNameLength = static_cast<unsigned int>(nameLength);
         }
         for (profileIndexb = 0; profileIndexb < 40; ++profileIndexb)
         {
@@ -1536,7 +1533,7 @@ void __cdecl RuntimeErrorInternal(int channel, char *codePos, unsigned int index
             Com_PrintError(channel, "called from:\n");
             Scr_PrintPrevCodePos(
                 0,
-                (char *)(uintptr_t)scrVmPub.stack[3 * i - 96].u.intValue,
+                (char *)scrVmPub.function_frame_start[i].fs.pos,
                 scrVmPub.function_frame_start[i].fs.localId == 0);
         }
         Com_PrintError(channel, "started from:\n");
@@ -1544,4 +1541,3 @@ void __cdecl RuntimeErrorInternal(int channel, char *codePos, unsigned int index
     }
     Com_PrintError(channel, "************************************\n");
 }
-

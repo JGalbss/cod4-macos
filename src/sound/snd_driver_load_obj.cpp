@@ -14,9 +14,17 @@ LoadedSound *__cdecl SND_LoadFromBuffer(void *buffer, const char *soundName)
     {
         if (info.data_len)
         {
-            loadSnd = (LoadedSound*)Hunk_Alloc(0x2Cu, "SND_LoadFromBuffer", 15);
+            loadSnd = reinterpret_cast<LoadedSound *>(Hunk_Alloc(sizeof(*loadSnd), "SND_LoadFromBuffer", 15));
             loadSnd->name = soundName;
-            qmemcpy(&loadSnd->sound, &info, 0x24u);
+            loadSnd->sound.info.format = info.format;
+            loadSnd->sound.info.data_ptr = info.data_ptr;
+            loadSnd->sound.info.data_len = info.data_len;
+            loadSnd->sound.info.rate = info.rate;
+            loadSnd->sound.info.bits = info.bits;
+            loadSnd->sound.info.channels = info.channels;
+            loadSnd->sound.info.samples = info.samples;
+            loadSnd->sound.info.block_size = info.block_size;
+            loadSnd->sound.info.initial_ptr = info.initial_ptr;
             SND_SetData(&loadSnd->sound, (void*)info.data_ptr);
             return loadSnd;
         }

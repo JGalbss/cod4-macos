@@ -97,10 +97,10 @@ TEST_HOME="$(mktemp -d /tmp/jgalbs-cod4-home.XXXXXX)"
   +devmap mp_vacant
 ```
 
-A new profile gets **New Experience** as a default Favorite. Loading an
-existing server cache does not overwrite or re-add a Favorite the player has
-removed. The remote server was reachable during development, but external
-availability is not guaranteed by the client.
+**jgalbs** (`159.65.37.227:28961`) is ensured in Favorites whenever
+the cache loads. Existing entries are preserved and the parsed-address check
+prevents duplicates. The remote server was reachable during development, but
+external availability is not guaranteed by the client.
 
 ## Focused regression tools
 

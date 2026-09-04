@@ -291,8 +291,15 @@ void SCR_ClearScreen()
 
 void __cdecl SCR_UpdateLoadScreen()
 {
+#if defined(KISAK_OAT_ZONES)
+    // OAT loading is synchronous on this port.  Repaint explicitly while it is
+    // decoding, but only after both renderer and UI have been initialized.
+    if (cls.rendererStarted && cls.uiStarted)
+        SCR_UpdateScreen();
+#else
     if (!IsFastFileLoad())
         SCR_UpdateScreen();
+#endif
 }
 
 const char *WeaponStateNames_65[27] =
@@ -457,4 +464,3 @@ void CL_CubemapShotUsage()
     Com_Printf(0, "  The index of refraction must always be 1 or greater.\n");
     Com_Printf(0, "  This is always calculated, and defaults to air-water interface (n0 = 1, n1 = 1.333).\n");
 }
-

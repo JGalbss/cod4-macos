@@ -705,15 +705,15 @@ void __cdecl track_PrintInfo()
         ++nodeCount;
     nodeCount += g_physicalMemInfoCount;
     len2 += nodeCount;
-    sorted_mem_track = (mem_track_t*)malloc(20 * len2);
+    sorted_mem_track = (mem_track_t*)malloc(sizeof(*sorted_mem_track) * len2);
     if (sorted_mem_track)
     {
         len = 0;
-        Com_Memcpy((char*)sorted_mem_track, (char*)g_mem_track, 20 * g_mem_track_count);
+        Com_Memcpy((char*)sorted_mem_track, (char*)g_mem_track, sizeof(*sorted_mem_track) * g_mem_track_count);
         len += g_mem_track_count;
-        Com_Memcpy((char*)&sorted_mem_track[len], (char*)g_hunk_track, 20 * g_hunk_track_count);
+        Com_Memcpy((char*)&sorted_mem_track[len], (char*)g_hunk_track, sizeof(*sorted_mem_track) * g_hunk_track_count);
         len += g_hunk_track_count;
-        Com_Memcpy((char*)&sorted_mem_track[len], (char*)g_hunklow_track, 20 * g_hunklow_track_count);
+        Com_Memcpy((char*)&sorted_mem_track[len], (char*)g_hunklow_track, sizeof(*sorted_mem_track) * g_hunklow_track_count);
         len += g_hunklow_track_count;
         if (minSpecImageMemory)
         {
@@ -821,7 +821,7 @@ void __cdecl track_PrintInfo()
             if (v8)
                 info.nonSwapMinSpecTotal += mem_trackb->size;
         }
-        qsort(sorted_mem_track, len, 0x14u, (int(__cdecl*)(const void*, const void*))mem_track_compare);
+        qsort(sorted_mem_track, len, sizeof(*sorted_mem_track), (int(__cdecl*)(const void*, const void*))mem_track_compare);
         info.typeTotal[23] = info.typeTotal[19]
             + info.typeTotal[22]
             + info.typeTotal[21]

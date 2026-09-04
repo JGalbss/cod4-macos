@@ -1422,7 +1422,7 @@ void __cdecl Com_AddLoadedSoundFile(SoundFile *soundFile, char *fileName)
     else
     {
         soundFile->exists = 0;
-        soundFile->u.loadSnd = (LoadedSound*)CM_Hunk_Alloc(0x2Cu, "_loaded", 15);
+        soundFile->u.loadSnd = (LoadedSound*)CM_Hunk_Alloc(sizeof(*soundFile->u.loadSnd), "_loaded", 15);
         soundFile->u.loadSnd->name = fileName;
     }
 }
@@ -1547,7 +1547,8 @@ void __cdecl Com_MakeSoundAliasesPermanent(snd_alias_list_t *aliasInfo, SoundFil
                             stringBytesCount += strlen(builda->subtitleText) + 1;
                     }
                     Com_InitSoundAliasHash(aliasCount);
-                    aliasInfo->head = (snd_alias_t*)CM_Hunk_Alloc(92 * saLoadObjGlob.tempAliasCount, "_aliases", 15);
+                    aliasInfo->head = reinterpret_cast<snd_alias_t *>(
+                        CM_Hunk_Alloc(sizeof(*aliasInfo->head) * saLoadObjGlob.tempAliasCount, "_aliases", 15));
                     soundFileInfo->files = (SoundFile*)CM_Hunk_Alloc(sizeof(SoundFile) * soundCount, "_sound files", 15);
                     strings = (char*)CM_Hunk_Alloc(stringBytesCount, "_strings", 15);
                     currentNameb = 0;
@@ -1587,7 +1588,7 @@ void __cdecl Com_MakeSoundAliasesPermanent(snd_alias_list_t *aliasInfo, SoundFil
                         alias = &aliasInfo->head[aliasInfo->count];
                         if (!aliasList || I_stricmp(aliasList->head->aliasName, currentNameb))
                         {
-                            aliasList = (snd_alias_list_t*)CM_Hunk_Alloc(0xCu, "_alias list", 15);
+                            aliasList = (snd_alias_list_t*)CM_Hunk_Alloc(sizeof(*aliasList), "_alias list", 15);
                             if (!Com_AddAliasList(currentNameb, aliasList))
                             {
                                 aliasList = 0;

@@ -246,7 +246,10 @@ void __cdecl CM_LoadStaticModels()
     }
     if (numStaticModels)
     {
-        cm.staticModelList = (cStaticModel_s *)CM_Hunk_Alloc(80 * numStaticModels, "CM_CreateStaticModel", 27);
+        cm.staticModelList = (cStaticModel_s *)CM_Hunk_Alloc(
+            sizeof(*cm.staticModelList) * numStaticModels,
+            "CM_CreateStaticModel",
+            27);
         ptr = Com_EntityString(0);
         iassert( ptr );
         ProfLoad_Begin("Create static model collision");
@@ -500,7 +503,7 @@ void CMod_LoadNodes()
     in = Com_GetBspLump(LUMP_NODES, 0x24u, &count);
     if (!count)
         Com_Error(ERR_DROP, "Map has no nodes");
-    cm.nodes = (cNode_t*)CM_Hunk_Alloc(8 * count, "CMod_LoadNodes", 25);
+    cm.nodes = (cNode_t*)CM_Hunk_Alloc(sizeof(*cm.nodes) * count, "CMod_LoadNodes", 25);
     result = (cNode_t *)(uintptr_t)count;
     cm.numNodes = count;
     out = cm.nodes;
@@ -663,7 +666,7 @@ MapEnts *__cdecl MapEnts_GetFromString(char *name, const char *entityString, int
     [[maybe_unused]] const char *begin; // [esp+A38h] [ebp-4h]
     [[maybe_unused]] char *entityStringa; // [esp+A48h] [ebp+Ch]
 
-    mapEnts = (MapEnts*)CM_Hunk_Alloc(0xCu, "CMod_LoadEntityString", 30);
+    mapEnts = (MapEnts*)CM_Hunk_Alloc(sizeof(*mapEnts), "CMod_LoadEntityString", 30);
     nameLen = strlen(name);
     mapEnts->name = (const char*)CM_Hunk_Alloc(nameLen + 1, "CMod_LoadEntityString", 30);
     memcpy((void*)mapEnts->name, name, nameLen + 1);
@@ -803,7 +806,7 @@ void __cdecl CMod_LoadBrushRelated(unsigned int version, bool usePvs)
     CMod_LoadSubmodels();
     user = Hunk_UserCreate(0x400000, "CMod_LoadBrushRelated", 1, 0, 26);
     TempMemoryReset(user);
-    cm.leafbrushNodes = (cLeafBrushNode_s*)(TempMalloc(0) - 20);
+    cm.leafbrushNodes = (cLeafBrushNode_s*)(TempMalloc(0) - sizeof(cLeafBrushNode_s));
     if (version > 0xE)
         CMod_LoadLeafBrushNodes();
     else
@@ -811,10 +814,14 @@ void __cdecl CMod_LoadBrushRelated(unsigned int version, bool usePvs)
     CMod_LoadSubmodelBrushNodes();
     CM_InitBoxHull();
     ++cm.leafbrushNodes;
-    leafbrushNodesCount = (TempMalloc(0) - (char*)cm.leafbrushNodes) / 20;
+    leafbrushNodesCount = static_cast<int>(
+        (TempMalloc(0) - (char*)cm.leafbrushNodes) / sizeof(cLeafBrushNode_s));
     cm.leafbrushNodesCount = leafbrushNodesCount + 1;
-    leafbrushNodes = (cLeafBrushNode_s*)CM_Hunk_Alloc(20 * (leafbrushNodesCount + 1), "CMod_LoadBrushRelated", 26);
-    memcpy(&leafbrushNodes[1].axis, &cm.leafbrushNodes->axis, 20 * leafbrushNodesCount);
+    leafbrushNodes = (cLeafBrushNode_s*)CM_Hunk_Alloc(
+        sizeof(*leafbrushNodes) * (leafbrushNodesCount + 1),
+        "CMod_LoadBrushRelated",
+        26);
+    memcpy(&leafbrushNodes[1], cm.leafbrushNodes, sizeof(*leafbrushNodes) * leafbrushNodesCount);
     cm.leafbrushNodes = leafbrushNodes;
     Hunk_UserDestroy(user);
 }
@@ -1149,7 +1156,7 @@ cLeafBrushNode_s *__cdecl CMod_AllocLeafBrushNode()
 {
     [[maybe_unused]] cLeafBrushNode_s *result; // eax
 
-    result = (cLeafBrushNode_s*)TempMalloc(0x14u);
+    result = (cLeafBrushNode_s*)TempMalloc(sizeof(*result));
     result->axis = 0;
     result->leafBrushCount = 0;
     result->contents = 0;
@@ -1282,7 +1289,7 @@ void CMod_LoadBrushes()
     memcpy(cm.brushEdges, inEdges, allocSizeEdges);
     outEdges = cm.brushEdges;
     sidesCount -= 6 * brushCount;
-    allocSizeSides = 12 * sidesCount;
+    allocSizeSides = sizeof(*cm.brushsides) * sidesCount;
     if (sidesCount)
         cm.brushsides = (cbrushside_t *)CM_Hunk_Alloc(allocSizeSides, "CMod_LoadBrushSides", 26);
     else
@@ -1290,7 +1297,7 @@ void CMod_LoadBrushes()
     cm.numBrushSides = sidesCount;
     outSides = cm.brushsides;
     countAllocatedBrushes = brushCount + 1;
-    allocSizeBrushes = 80 * (brushCount + 1);
+    allocSizeBrushes = sizeof(*cm.brushes) * (brushCount + 1);
     cm.brushes = (cbrush_t*)CM_Hunk_Alloc(allocSizeBrushes, "CMod_LoadBrushes", 26);
     cm.numBrushes = brushCount;
     // Hex-rays self-compare; dropped (was a uint16-truncation check).
@@ -1568,4 +1575,3 @@ void CMod_LoadCollisionAabbTrees()
         ++out;
     }
 }
-

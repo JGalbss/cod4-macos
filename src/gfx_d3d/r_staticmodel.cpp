@@ -5,6 +5,7 @@
 #include <universal/com_files.h>
 #include <xanim/xmodel.h>
 #include "r_xsurface.h"
+#include <functional>
 #ifdef KISAK_MP
 #include <cgame_mp/cg_local_mp.h>
 #elif KISAK_SP
@@ -67,7 +68,6 @@ BOOL __cdecl R_StaticModelCompare(
     const ComPrimaryLight *primaryLight; // [esp+0h] [ebp-Ch]
     int comparison; // [esp+8h] [ebp-4h]
     int comparisona; // [esp+8h] [ebp-4h]
-    int comparisonb; // [esp+8h] [ebp-4h]
 
     primaryLight = Com_GetPrimaryLight(smodelInst0.smodelDrawInst.primaryLightIndex);
     comparison = primaryLight->type - Com_GetPrimaryLight(smodelInst1.smodelDrawInst.primaryLightIndex)->type;
@@ -76,8 +76,9 @@ BOOL __cdecl R_StaticModelCompare(
     comparisona = smodelInst0.smodelDrawInst.primaryLightIndex - smodelInst1.smodelDrawInst.primaryLightIndex;
     if (comparisona)
         return comparisona < 0;
-    comparisonb = smodelInst0.smodelDrawInst.model - smodelInst1.smodelDrawInst.model;
-    if (!comparisonb)
-        comparisonb = smodelInst0.smodelDrawInst.reflectionProbeIndex - smodelInst1.smodelDrawInst.reflectionProbeIndex;
-    return comparisonb < 0;
+    XModel *const model0 = smodelInst0.smodelDrawInst.model;
+    XModel *const model1 = smodelInst1.smodelDrawInst.model;
+    if (model0 != model1)
+        return std::less<XModel *>{}(model0, model1);
+    return smodelInst0.smodelDrawInst.reflectionProbeIndex < smodelInst1.smodelDrawInst.reflectionProbeIndex;
 }

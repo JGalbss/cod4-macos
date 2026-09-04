@@ -16,7 +16,29 @@ struct OatZone
     std::vector<XAssetInfoGeneric *> assets;
 };
 
-OatZone *OAT_LoadZone(const char *path, char *errOut, const int errCap)
+namespace
+{
+    class BridgeProgressCallback final : public ProgressCallback
+    {
+    public:
+        BridgeProgressCallback(OatProgressCallback callback, void *userData)
+            : m_callback(callback), m_userData(userData)
+        {
+        }
+
+        void OnProgress(const size_t current, const size_t total) override
+        {
+            m_callback(current, total, m_userData);
+        }
+
+    private:
+        OatProgressCallback m_callback;
+        void *m_userData;
+    };
+}
+
+OatZone *OAT_LoadZoneWithProgress(const char *path, char *errOut, const int errCap,
+                                  OatProgressCallback progress, void *userData)
 {
     const auto copyError = [errOut, errCap](const std::string &message)
     {
@@ -26,7 +48,11 @@ OatZone *OAT_LoadZone(const char *path, char *errOut, const int errCap)
         errOut[errCap - 1] = '\0';
     };
 
-    auto loaded = ZoneLoading::LoadZone(path, std::nullopt);
+    std::optional<std::unique_ptr<ProgressCallback>> progressCallback;
+    if (progress)
+        progressCallback = std::make_unique<BridgeProgressCallback>(progress, userData);
+
+    auto loaded = ZoneLoading::LoadZone(path, std::move(progressCallback));
     if (!loaded)
     {
         copyError(loaded.error());
@@ -42,6 +68,11 @@ OatZone *OAT_LoadZone(const char *path, char *errOut, const int errCap)
         out->assets.push_back(asset);
 
     return out.release();
+}
+
+OatZone *OAT_LoadZone(const char *path, char *errOut, const int errCap)
+{
+    return OAT_LoadZoneWithProgress(path, errOut, errCap, nullptr, nullptr);
 }
 
 int OAT_AssetCount(const OatZone *zone)

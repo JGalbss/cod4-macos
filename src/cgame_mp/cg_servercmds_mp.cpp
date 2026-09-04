@@ -970,7 +970,7 @@ void __cdecl CG_ConfigStringModified(int32_t localClientNum)
                     }
                     else
                     {
-                        *((uintptr_t *)cgs + num - 665) = (uintptr_t)R_RegisterModel(str); // KISAKTODO: unhack typing
+                        cgs->gameModels[num - 830] = R_RegisterModel(str);
                     }
                     break;
                 }

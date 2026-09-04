@@ -274,10 +274,10 @@ UILocalVarContext *__cdecl UI_GetLocalVarsContext(int localClientNum)
 
 void __cdecl TRACK_ui_main()
 {
-    track_static_alloc_internal(&sharedUiInfo, 116144, "sharedUiInfo", 34);
-    track_static_alloc_internal(&uiInfoArray, 9392, "uiInfoArray", 34);
-    track_static_alloc_internal(MonthAbbrev, 48, "MonthAbbrev", 34);
-    track_static_alloc_internal(menuBuf2, 0x8000, "menuBuf2", 34);
+    track_static_alloc_internal(&sharedUiInfo, sizeof(sharedUiInfo), "sharedUiInfo", 34);
+    track_static_alloc_internal(&uiInfoArray, sizeof(uiInfoArray), "uiInfoArray", 34);
+    track_static_alloc_internal(MonthAbbrev, sizeof(MonthAbbrev), "MonthAbbrev", 34);
+    track_static_alloc_internal(menuBuf2, sizeof(menuBuf2), "menuBuf2", 34);
 }
 
 void __cdecl UI_DrawSides(
@@ -958,8 +958,7 @@ uiInfo_s *UI_BuildFindPlayerList()
     result = &uiInfoArray;
     if (uiInfoArray.nextFindPlayerRefresh)
     {
-        result = (uiInfo_s *)(uintptr_t)uiInfo->nextFindPlayerRefresh;
-        if ((int)(uintptr_t)result <= uiInfo->uiDC.realTime)
+        if (uiInfo->nextFindPlayerRefresh <= uiInfo->uiDC.realTime)
         {
             UI_UpdateDisplayServers(uiInfo);
             for (i = 0; i < 16; ++i)
@@ -970,11 +969,11 @@ uiInfo_s *UI_BuildFindPlayerList()
                     ++numFound;
                     for (j = 0; j < info.numLines; ++j)
                     {
-                        if (*(_DWORD *)&info.text[16 * j - 2040])
+                        if (info.lines[j][2])
                         {
-                            if (**(_BYTE **)&info.text[16 * j - 2040])
+                            if (*info.lines[j][2])
                             {
-                                I_strncpyz(dest, *(char **)&info.text[16 * j - 2036], 34);
+                                I_strncpyz(dest, info.lines[j][3], 34);
                                 I_CleanStr(dest);
                                 if (stristr(dest, uiInfo->findPlayerName))
                                 {
@@ -1047,7 +1046,7 @@ uiInfo_s *UI_BuildFindPlayerList()
                 if (uiInfo->numFoundPlayerServers)
                 {
                     if (uiInfo->numFoundPlayerServers == 2)
-                        result = (uiInfo_s *)(uintptr_t)Com_sprintf(
+                        Com_sprintf(
                             uiInfo->foundPlayerServerAddresses[uiInfo->numFoundPlayerServers + 15],
                             0x40u,
                             "%d server%s found with player %s",
@@ -1055,7 +1054,7 @@ uiInfo_s *UI_BuildFindPlayerList()
                             "",
                             uiInfo->findPlayerName);
                     else
-                        result = (uiInfo_s *)(uintptr_t)Com_sprintf(
+                        Com_sprintf(
                             uiInfo->foundPlayerServerAddresses[uiInfo->numFoundPlayerServers + 15],
                             0x40u,
                             "%d server%s found with player %s",
@@ -1065,11 +1064,12 @@ uiInfo_s *UI_BuildFindPlayerList()
                 }
                 else
                 {
-                    result = (uiInfo_s *)(uintptr_t)Com_sprintf(
+                    Com_sprintf(
                         uiInfo->foundPlayerServerAddresses[uiInfo->numFoundPlayerServers + 15],
                         0x40u,
                         "no servers found");
                 }
+                result = uiInfo;
                 uiInfo->nextFindPlayerRefresh = 0;
             }
             else
@@ -2567,7 +2567,6 @@ int __cdecl UI_GetPlayerProfileListIndexFromName(const char *name)
 // stack-local dirlist[2048] — UB if used. Caller discards the value. Change to void.
 void UI_LoadMods()
 {
-    [[maybe_unused]] const char *result; // eax
     int numdirs; // [esp+20h] [ebp-818h]
     const char *dirptr; // [esp+24h] [ebp-814h]
     char dirlist[2048]; // [esp+28h] [ebp-810h] BYREF
@@ -2581,15 +2580,13 @@ void UI_LoadMods()
     dirptr = dirlist;
     for (i = 0; ; ++i)
     {
-        result = (const char *)(uintptr_t)i;
         if (i >= numdirs)
             break;
         dirlen = strlen(dirptr) + 1;
         descptr = (char *)&dirptr[dirlen];
         sharedUiInfo.modList[sharedUiInfo.modCount].modName = String_Alloc(dirptr);
         sharedUiInfo.modList[sharedUiInfo.modCount].modDescr = String_Alloc(descptr);
-        result = &dirptr[strlen(descptr) + 1 + dirlen];
-        dirptr = result;
+        dirptr += strlen(descptr) + 1 + dirlen;
         if (++sharedUiInfo.modCount >= 64)
             break;
     }
@@ -3138,25 +3135,52 @@ void __cdecl UI_RunMenuScript(int localClientNum, const char **args, const char 
                                                                                                         else
                                                                                                         {
                                                                                                             Dvar_SetBoolByName("cg_thirdPerson", 0);
-                                                                                                            UI_UpdateDisplayServers((uiInfo_s *)dc);
                                                                                                             // LWSS: Remove punkbuster crap
                                                                                                             //ServerPunkBuster = LAN_GetServerPunkBuster(
                                                                                                             //    ui_netSource->current.integer,
                                                                                                             //    *(_DWORD *)&sharedUiInfo.gap8EB4[4 * *(_DWORD *)&sharedUiInfo.serverStatus.string[1128] - 7100]);
                                                                                                             //if (ServerPunkBuster != 1 || Dvar_GetBool("cl_punkbuster"))
                                                                                                             //{
-                                                                                                                if (*(int *)&sharedUiInfo.serverStatus.string[1128] >= 0
-                                                                                                                    && *(int *)&sharedUiInfo.serverStatus.string[1128] < *(int *)&sharedUiInfo.gap8EB4[72900])
+                                                                                                                // Do not rebuild the live server list here. A master-server
+                                                                                                                // response arriving between the row click and this button used
+                                                                                                                // to reset the selected index to -1, making Join appear to do
+                                                                                                                // nothing. Prefer the feeder selection and fall back to the
+                                                                                                                // list box cursor, which is also the row visibly highlighted.
+                                                                                                                int selectedDisplayIndex = *(int *)&sharedUiInfo.serverStatus.string[1128];
+                                                                                                                const int displayedServerCount = *(int *)&sharedUiInfo.gap8EB4[72900];
+                                                                                                                if (selectedDisplayIndex < 0 || selectedDisplayIndex >= displayedServerCount)
                                                                                                                 {
+                                                                                                                    menuDef_t *joinMenu = Menus_FindByName(dc, "pc_join_unranked");
+                                                                                                                    itemDef_s *serverList = joinMenu
+                                                                                                                        ? Menu_FindItemByName(joinMenu, "serverlist") : nullptr;
+                                                                                                                    if (serverList)
+                                                                                                                        selectedDisplayIndex = serverList->cursorPos[localClientNum];
+                                                                                                                }
+                                                                                                                if (selectedDisplayIndex >= 0
+                                                                                                                    && selectedDisplayIndex < displayedServerCount)
+                                                                                                                {
+                                                                                                                    const unsigned int serverIndex =
+                                                                                                                        *(_DWORD *)&sharedUiInfo.gap8EB4[4 * selectedDisplayIndex - 7100];
                                                                                                                     LAN_GetServerAddressString(
                                                                                                                         ui_netSource->current.integer,
-                                                                                                                        *(_DWORD *)&sharedUiInfo.gap8EB4[4
-                                                                                                                        * *(_DWORD *)&sharedUiInfo.serverStatus.string[1128]
-                                                                                                                        - 7100],
+                                                                                                                        serverIndex,
                                                                                                                         v44,
                                                                                                                         1024);
-                                                                                                                    v16 = va("connect %s\n", v44);
-                                                                                                                    Cbuf_AddText(localClientNum, v16);
+                                                                                                                    if (v44[0])
+                                                                                                                    {
+                                                                                                                        UI_StopServerRefresh();
+                                                                                                                        Com_Printf(13, "Joining server %s\n", v44);
+                                                                                                                        v16 = va("connect %s\n", v44);
+                                                                                                                        Cbuf_AddText(localClientNum, v16);
+                                                                                                                    }
+                                                                                                                    else
+                                                                                                                    {
+                                                                                                                        Com_Printf(13, "Join Server: selected row has no address\n");
+                                                                                                                    }
+                                                                                                                }
+                                                                                                                else
+                                                                                                                {
+                                                                                                                    Com_Printf(13, "Join Server: no server row is selected\n");
                                                                                                                 }
                                                                                                             //}
                                                                                                             //else
@@ -4516,9 +4540,9 @@ void UI_GetGameTypesList()
     sharedUiInfo.joinGameTypes[0].gameType = String_Alloc("All");
     sharedUiInfo.joinGameTypes[sharedUiInfo.numJoinGameTypes++].gameTypeName = "";
     if (IsFastFileLoad())
-        ((void(__cdecl *)(void (*)()))UI_GetGameTypesList_FastFile)(UI_GetGameTypesList_FastFile);
+        UI_GetGameTypesList_FastFile();
     else
-        ((void(__cdecl *)(void (*)()))UI_GetGameTypesList_LoadObj)(UI_GetGameTypesList_LoadObj);
+        UI_GetGameTypesList_LoadObj();
     if (!sharedUiInfo.numGameTypes) {
         // KISAKHACK-AUDIT(no-game-types): DB_FindXAssetHeader is stubbed on
         // Switch (asset loader not ported yet), so _gametypes.txt is never
@@ -4681,7 +4705,6 @@ void __cdecl LAN_LoadCachedServers()
     char cacheName[] = "servercache.dat";
     int fileIn; // [esp+0h] [ebp-8h] BYREF
     int success; // [esp+4h] [ebp-4h]
-    const bool hadHomeCache = FS_SV_FileExists(cacheName) != 0;
 
     if (FS_SV_FOpenFileRead(cacheName, &fileIn)
         && (success = LAN_LoadCachedServersInternal(fileIn), FS_FCloseFile(fileIn), success))
@@ -4694,18 +4717,41 @@ void __cdecl LAN_LoadCachedServers()
         cls.numfavoriteservers = 0;
     }
 
-    if (!hadHomeCache)
+    // Keep the project's public server available on fresh installs and upgrades.
+    // LAN_AddServer compares parsed addresses, so this never creates duplicates
+    // and otherwise leaves the player's existing Favorites untouched.
+    char defaultServerName[] = "jgalbs";
+    char defaultServerAddress[] = "159.65.37.227:28961";
+    const int addResult = LAN_AddServer(2, defaultServerName, defaultServerAddress);
+    bool cacheChanged = addResult == 1;
+
+    // Earlier development builds seeded this address as "New Experience".
+    // Upgrade that one entry in place while preserving the rest of the list.
+    if (addResult == 0)
     {
-        // Put the project's public server in Favorites for a fresh profile.
-        // A valid existing cache is deliberately left untouched so upgrades
-        // preserve the player's own list (including a prior removal).
-        char defaultServerName[] = "New Experience";
-        char defaultServerAddress[] = "159.65.37.227:28961";
-        if (LAN_AddServer(2, defaultServerName, defaultServerAddress) == 1)
+        netadr_t defaultAddress;
+        if (NET_StringToAdr(defaultServerAddress, &defaultAddress))
         {
-            Com_Printf(13, "Added default favorite server %s (%s)\n",
-                       defaultServerName, defaultServerAddress);
+            for (int i = 0; i < cls.numfavoriteservers; ++i)
+            {
+                if (NET_CompareAdr(cls.favoriteServers[i].adr, defaultAddress)
+                    && I_stricmp(cls.favoriteServers[i].hostName, defaultServerName))
+                {
+                    I_strncpyz(cls.favoriteServers[i].hostName, defaultServerName,
+                               sizeof(cls.favoriteServers[i].hostName));
+                    cls.favoriteServers[i].dirty = 1;
+                    cacheChanged = true;
+                    break;
+                }
+            }
         }
+    }
+
+    if (cacheChanged)
+    {
+        Com_Printf(13, "Ensured default favorite server %s (%s)\n",
+                   defaultServerName, defaultServerAddress);
+        LAN_SaveServersToCache();
     }
 }
 
@@ -5898,7 +5944,7 @@ char *__cdecl UI_ReplaceConversionString(char *sourceString, const char *replace
     char outputString[1028]; // [esp+0h] [ebp-430h] BYREF
     ConversionArguments convArgs; // [esp+408h] [ebp-28h] BYREF
 
-    memset(&convArgs.args[1], 0, 32);
+    memset(&convArgs, 0, sizeof(convArgs));
     convArgs.argCount = 1;
     convArgs.args[0] = replaceString;
     UI_ReplaceConversions(sourceString, &convArgs, outputString, 1024);
@@ -5925,7 +5971,6 @@ void __cdecl UI_ReplaceConversions(
     char *outputString,
     int outputStringSize)
 {
-    int v4; // eax
     int v5; // edx
     signed int v6; // [esp+0h] [ebp-38h]
     int argIndex; // [esp+24h] [ebp-14h]
@@ -5936,8 +5981,7 @@ void __cdecl UI_ReplaceConversions(
 
     if (!sourceString)
         MyAssertHandler(".\\ui_mp\\ui_main_mp.cpp", 7349, 0, "%s", "sourceString");
-    v4 = (int)(uintptr_t)strstr(sourceString, "&&");
-    if (v4)
+    if (strstr(sourceString, "&&"))
     {
         if (!arguments)
             MyAssertHandler(".\\ui_mp\\ui_main_mp.cpp", 7357, 0, "%s", "arguments");

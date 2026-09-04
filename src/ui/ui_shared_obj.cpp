@@ -6,24 +6,8 @@
 #include <universal/q_shared.h> // LOBYTE()
 #include <gfx_d3d/r_material.h>
 
-// KISAKHACK-AUDIT: the Eval expression evaluator stores int/double values across
-// adjacent EvalOperatorType slots via type-punning. memcpy helpers preserve the
-// upstream byte semantics without strict-aliasing. Noinline so GCC's array-bounds
-// tracker can't follow opStack[]+N past the [1024] limit into valStack[].
-[[gnu::noinline]] static double KisakEval_GetDouble(const EvalOperatorType *slot)
-{
-    double d;
-    memcpy(&d, slot, sizeof(double));
-    return d;
-}
-[[gnu::noinline]] static void KisakEval_SetDouble(EvalOperatorType *slot, double d)
-{
-    memcpy(slot, &d, sizeof(double));
-}
-[[gnu::noinline]] static EvalOperatorType &KisakEval_OpAt(EvalOperatorType *base, unsigned int index)
-{
-    return base[index];
-}
+#include <cstddef>
+#include <cstdint>
 
 $F99A9AECA2B60514CA5C8024B8EAC369 g_load_0;
 char menuBuf1[4096];
@@ -218,21 +202,35 @@ void __cdecl PC_PushScript(source_s *source, script_s *script)
     source->scriptstack = script;
 }
 
+namespace
+{
+constexpr uint32_t kUiMemoryMarker = 0x12345678u;
+
+struct alignas(std::max_align_t) UiMemoryHeader
+{
+    uint32_t marker;
+};
+}
+
 unsigned int *__cdecl GetMemory(unsigned int size)
 {
-    unsigned int *ptr; // [esp+4h] [ebp-4h]
+    UiMemoryHeader *header = static_cast<UiMemoryHeader *>(
+        Z_Malloc(size + sizeof(UiMemoryHeader), "GetMemory", 10));
 
-    ptr = (unsigned int *)Z_Malloc(size + 4, "GetMemory", 10);
-    if (!ptr)
+    if (!header)
         return 0;
-    *ptr = 0x12345678;
-    return ptr + 1;
+    header->marker = kUiMemoryMarker;
+    return reinterpret_cast<unsigned int *>(header + 1);
 }
 
 void __cdecl FreeMemory(char *ptr)
 {
-    if (*((_DWORD *)ptr - 1) == 0x12345678)
-        Z_Free(ptr - 4, 10);
+    if (!ptr)
+        return;
+
+    UiMemoryHeader *header = reinterpret_cast<UiMemoryHeader *>(ptr) - 1;
+    if (header->marker == kUiMemoryMarker)
+        Z_Free(header, 10);
 }
 
 int numtokens;
@@ -1436,12 +1434,6 @@ int __cdecl PC_Directive_include(source_s *source)
     char v2; // [esp+1Bh] [ebp-4B9h]
     char *v3; // [esp+20h] [ebp-4B4h]
     char *v4; // [esp+24h] [ebp-4B0h]
-    char v5; // [esp+2Bh] [ebp-4A9h]
-    token_s *v6; // [esp+2Ch] [ebp-4A8h]
-    char *v7; // [esp+40h] [ebp-494h]
-    char v8; // [esp+47h] [ebp-48Dh]
-    char *v9; // [esp+4Ch] [ebp-488h]
-    char *includepath; // [esp+50h] [ebp-484h] BYREF
     char path[68]; // [esp+54h] [ebp-480h] BYREF
     script_s *script; // [esp+98h] [ebp-43Ch]
     token_s token; // [esp+9Ch] [ebp-438h] BYREF
@@ -1457,21 +1449,8 @@ int __cdecl PC_Directive_include(source_s *source)
         script = LoadScriptFile(token.string);
         if (!script)
         {
-            includepath = source->includepath;
-            v9 = path;
-            do
-            {
-                v8 = *includepath;
-                *v9++ = *includepath++;
-            } while (v8);
-            v7 = &token.string[strlen(token.string) + 1];
-            v6 = (token_s *)((char *)&includepath + 3);
-            do
-            {
-                v5 = v6->string[1];
-                v6 = (token_s *)((char *)v6 + 1);
-            } while (v5);
-            memcpy(v6, &token, v7 - (char *)&token);
+            I_strncpyz(path, source->includepath, sizeof(path));
+            I_strncat(path, sizeof(path), token.string);
             script = LoadScriptFile(path);
         }
         goto LABEL_30;
@@ -3352,15 +3331,12 @@ void PC_SourceError(int handle, char *format, ...)
 
 bool __cdecl Eval_CanPushValue(const Eval *eval)
 {
-    [[maybe_unused]] const char *pExceptionObject; // [esp+0h] [ebp-4h] BYREF
-
     if (!eval->valStackPos)
         return 1;
-    if (eval->valStackPos == 1024)
+    if (eval->valStackPos >= 1024)
     {
-        pExceptionObject = "evaluation stack overflow - expression is too complex";
-        //iassert(0); //iassert(0); //iassert(0); //iassert(0); //iassert(0); //_CxxThrowException(&pExceptionObject, &PA.deinit);
         iassert(0);
+        return false;
     }
     return eval->pushedOp;
 }
@@ -3561,505 +3537,338 @@ bool __cdecl Eval_IsUnaryOp(const Eval *eval)
 
 void __cdecl Eval_PrepareBinaryOpSameTypes(Eval *eval)
 {
-    int v1; // eax
-    [[maybe_unused]] const char *v2; // [esp+4h] [ebp-8h] BYREF
-    [[maybe_unused]] const char *pExceptionObject; // [esp+8h] [ebp-4h] BYREF
-
     if (eval->valStackPos < 2)
     {
-        pExceptionObject = "missing operand (for example, 'a + ' or ' / b')";
-        iassert(0); //iassert(0); //iassert(0); //iassert(0); //_CxxThrowException(&pExceptionObject, &PA.deinit);
+        iassert(0);
+        return;
     }
-    if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016) == EVAL_OP_COLON
-        || KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1020) == EVAL_OP_COLON)
+
+    EvalValue &left = eval->valStack[eval->valStackPos - 2];
+    EvalValue &right = eval->valStack[eval->valStackPos - 1];
+    if (left.type == EVAL_VALUE_STRING || right.type == EVAL_VALUE_STRING)
     {
-        v2 = "operation not valid on strings";
-        iassert(0); //iassert(0); //iassert(0); //iassert(0); //_CxxThrowException(&v2, &PA.deinit);
+        iassert(0);
+        return;
     }
-    if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016) != KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1020))
+
+    if (left.type != right.type)
     {
-        if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016) == EVAL_OP_RPAREN)
+        if (left.type == EVAL_VALUE_INT)
         {
-            KisakEval_SetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018), (double)(int)KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018));
-            v1 = eval->valStackPos - 2;
+            left.u.d = static_cast<double>(left.u.i);
+            left.type = EVAL_VALUE_DOUBLE;
         }
         else
         {
-            KisakEval_SetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022), (double)(int)KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022));
-            v1 = eval->valStackPos - 1;
+            right.u.d = static_cast<double>(right.u.i);
+            right.type = EVAL_VALUE_DOUBLE;
         }
-        eval->valStack[v1].type = EVAL_VALUE_DOUBLE;
     }
 }
 
 void __cdecl Eval_PrepareBinaryOpIntegers(Eval *eval)
 {
-    [[maybe_unused]] const char *v1; // [esp+0h] [ebp-8h] BYREF
-    [[maybe_unused]] const char *pExceptionObject; // [esp+4h] [ebp-4h] BYREF
-
     if (eval->valStackPos < 2)
     {
-        pExceptionObject = "missing operand (for example, 'a + ' or ' / b')";
-        iassert(0); //iassert(0); //iassert(0); //_CxxThrowException(&pExceptionObject, &PA.deinit);
+        iassert(0);
+        return;
     }
-    if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016) == EVAL_OP_COLON
-        || KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1020) == EVAL_OP_COLON)
+
+    EvalValue &left = eval->valStack[eval->valStackPos - 2];
+    EvalValue &right = eval->valStack[eval->valStackPos - 1];
+    if (left.type == EVAL_VALUE_STRING || right.type == EVAL_VALUE_STRING)
     {
-        v1 = "operation not valid on strings";
-        iassert(0); //iassert(0); //iassert(0); //_CxxThrowException(&v1, &PA.deinit);
+        iassert(0);
+        return;
     }
-    if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016) == EVAL_OP_LPAREN)
+    if (left.type == EVAL_VALUE_DOUBLE)
     {
-        KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) = (EvalOperatorType)((int)KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018)));
-        KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016) = EVAL_OP_RPAREN;
+        left.u.i = static_cast<int>(left.u.d);
+        left.type = EVAL_VALUE_INT;
     }
-    if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1020) == EVAL_OP_LPAREN)
+    if (right.type == EVAL_VALUE_DOUBLE)
     {
-        KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022) = (EvalOperatorType)((int)KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022)));
-        KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1020) = EVAL_OP_RPAREN;
+        right.u.i = static_cast<int>(right.u.d);
+        right.type = EVAL_VALUE_INT;
     }
 }
 
 void __cdecl Eval_PrepareBinaryOpBoolean(Eval *eval)
 {
-    [[maybe_unused]] const char *v1; // [esp+8h] [ebp-8h] BYREF
-    [[maybe_unused]] const char *pExceptionObject; // [esp+Ch] [ebp-4h] BYREF
-
     if (eval->valStackPos < 2)
     {
-        pExceptionObject = "missing operand (for example, 'a + ' or ' / b')";
-        iassert(0); //iassert(0); //_CxxThrowException(&pExceptionObject, &PA.deinit);
+        iassert(0);
+        return;
     }
-    if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016) == EVAL_OP_COLON
-        || KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1020) == EVAL_OP_COLON)
+
+    EvalValue &left = eval->valStack[eval->valStackPos - 2];
+    EvalValue &right = eval->valStack[eval->valStackPos - 1];
+    if (left.type == EVAL_VALUE_STRING || right.type == EVAL_VALUE_STRING)
     {
-        v1 = "operation not valid on strings";
-        iassert(0); //iassert(0); //_CxxThrowException(&v1, &PA.deinit);
+        iassert(0);
+        return;
     }
-    if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016))
-    {
-        KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) = (EvalOperatorType)(KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) != EVAL_OP_LPAREN);
-    }
-    else
-    {
-        KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) = (EvalOperatorType)(0.0 != KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018)));
-        KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016) = EVAL_OP_RPAREN;
-    }
-    if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1020))
-    {
-        KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022) = (EvalOperatorType)(KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022) != EVAL_OP_LPAREN);
-    }
-    else
-    {
-        KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022) = (EvalOperatorType)(0.0 != KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022)));
-        KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1020) = EVAL_OP_RPAREN;
-    }
+
+    const bool leftValue = left.type == EVAL_VALUE_INT ? left.u.i != 0 : left.u.d != 0.0;
+    const bool rightValue = right.type == EVAL_VALUE_INT ? right.u.i != 0 : right.u.d != 0.0;
+    left.type = EVAL_VALUE_INT;
+    left.u.i = leftValue;
+    right.type = EVAL_VALUE_INT;
+    right.u.i = rightValue;
 }
 
 bool __cdecl Eval_EvaluationStep(Eval *eval)
 {
-    bool result; // al
-    EvalValue *v2; // edx
-    EvalOperatorType *v3; // ecx
-    int v4; // [esp+10h] [ebp-94h]
-    [[maybe_unused]] const char *v5; // [esp+5Ch] [ebp-48h] BYREF
-    [[maybe_unused]] const char *v6; // [esp+60h] [ebp-44h] BYREF
-    [[maybe_unused]] const char *v7; // [esp+64h] [ebp-40h] BYREF
-    [[maybe_unused]] const char *v8; // [esp+68h] [ebp-3Ch] BYREF
-    [[maybe_unused]] const char *v9; // [esp+6Ch] [ebp-38h] BYREF
-    [[maybe_unused]] const char *v10; // [esp+70h] [ebp-34h] BYREF
-    [[maybe_unused]] const char *v11; // [esp+74h] [ebp-30h] BYREF
-    [[maybe_unused]] const char *v12; // [esp+78h] [ebp-2Ch] BYREF
-    [[maybe_unused]] const char *v13; // [esp+7Ch] [ebp-28h] BYREF
-    [[maybe_unused]] const char *v14; // [esp+80h] [ebp-24h] BYREF
-    [[maybe_unused]] const char *pExceptionObject; // [esp+84h] [ebp-20h] BYREF
-    bool v16; // [esp+8Ah] [ebp-1Ah]
-    bool same; // [esp+8Bh] [ebp-19h]
-    long double dQuotientFloor; // [esp+8Ch] [ebp-18h]
-    char *s; // [esp+94h] [ebp-10h]
-    int length[2]; // [esp+98h] [ebp-Ch]
-    int i; // [esp+A0h] [ebp-4h]
-
     if (!eval->opStackPos)
-        return 0;
-    if (eval->opStack[--eval->opStackPos] == EVAL_OP_LPAREN)
-        return 1;
-    if (eval->opStack[eval->opStackPos] == EVAL_OP_QUESTION)
+        return false;
+
+    const EvalOperatorType op = eval->opStack[--eval->opStackPos];
+    if (op == EVAL_OP_LPAREN)
+        return true;
+    if (op == EVAL_OP_QUESTION)
     {
-        pExceptionObject = "found '?' with no following ':' in expression of type 'a ? b : c'";
-        //iassert(0); //iassert(0); //iassert(0); //iassert(0); //iassert(0); //_CxxThrowException(&pExceptionObject, &PA.deinit);
         iassert(0);
+        return false;
     }
     if (!eval->valStackPos)
     {
-        v14 = "missing operand (for example, 'a + ' or ' / b')";
-        iassert(0); //iassert(0); //iassert(0); //iassert(0); //iassert(0); //_CxxThrowException(&v14, &PA.deinit);
+        iassert(0);
+        return false;
     }
-    switch (eval->opStack[eval->opStackPos])
+
+    EvalValue &top = eval->valStack[eval->valStackPos - 1];
+    switch (op)
     {
     case EVAL_OP_COLON:
         if (eval->valStackPos < 3)
         {
-            v6 = "missing operand (for example, 'a + ' or ' / b')";
-            iassert(0); //iassert(0); //iassert(0); //iassert(0); //iassert(0); //_CxxThrowException(&v6, &PA.deinit);
+            iassert(0);
+            return false;
         }
-        if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1012))
+        if (!eval->opStackPos || eval->opStack[eval->opStackPos - 1] != EVAL_OP_QUESTION)
         {
-            if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1012) != EVAL_OP_RPAREN)
+            iassert(0);
+            return false;
+        }
+        {
+            EvalValue &condition = eval->valStack[eval->valStackPos - 3];
+            EvalValue &ifTrue = eval->valStack[eval->valStackPos - 2];
+            EvalValue &ifFalse = eval->valStack[eval->valStackPos - 1];
+            if (condition.type == EVAL_VALUE_STRING)
             {
-                v5 = "can only switch on numbers";
-                iassert(0); //iassert(0); //iassert(0); //iassert(0); //iassert(0); //_CxxThrowException(&v5, &PA.deinit);
+                iassert(0);
+                return false;
             }
-            i = -(KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1014) != EVAL_OP_LPAREN) - 1;
-        }
-        else
-        {
-            if (0.0 == KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1014)))
-                v4 = -1;
+            const bool chooseTrue = condition.type == EVAL_VALUE_INT
+                ? condition.u.i != 0 : condition.u.d != 0.0;
+            if (ifTrue.type == EVAL_VALUE_STRING || ifFalse.type == EVAL_VALUE_STRING)
+            {
+                if (ifTrue.type != EVAL_VALUE_STRING || ifFalse.type != EVAL_VALUE_STRING)
+                {
+                    iassert(0);
+                    return false;
+                }
+                free(chooseTrue ? ifFalse.u.s : ifTrue.u.s);
+            }
             else
-                v4 = -2;
-            i = v4;
+            {
+                Eval_PrepareBinaryOpSameTypes(eval);
+            }
+            condition = chooseTrue ? ifTrue : ifFalse;
+            eval->valStackPos -= 2;
+            --eval->opStackPos;
         }
-        if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016) == EVAL_OP_COLON
-            && KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1020) == EVAL_OP_COLON)
-        {
-            free(eval->valStack[1 - i + eval->valStackPos].u.s);
-        }
-        else
-        {
-            Eval_PrepareBinaryOpSameTypes(eval);
-        }
-        v2 = &eval->valStack[i + eval->valStackPos];
-        v3 = &KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1012);
-        *v3 = (EvalOperatorType)v2->type;
-        v3[1] = *((EvalOperatorType *)&v2->type + 1);
-        v3[2] = (EvalOperatorType)v2->u.i;
-        v3[3] = *((EvalOperatorType *)&v2->u.s + 1);
-        eval->valStackPos -= 2;
-        --eval->opStackPos;
-        goto LABEL_121;
-    case EVAL_OP_PLUS:
-        if (eval->valStackPos >= 2
-            && KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016) == EVAL_OP_COLON
-            && KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1020) == EVAL_OP_COLON)
-        {
-            length[0] = strlen((const char *)KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018));
-            length[1] = strlen((const char *)KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022));
-            s = (char *)malloc(length[0] + length[1] + 1);
-            memcpy((unsigned __int8 *)s, (unsigned __int8 *)KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018), length[0]);
-            memcpy(
-                (unsigned __int8 *)&s[length[0]],
-                (unsigned __int8 *)KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022),
-                length[1] + 1);
-            free((void *)KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018));
-            free((void *)KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022));
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) = (EvalOperatorType)((uintptr_t)s);
-        }
-        else
-        {
-            Eval_PrepareBinaryOpSameTypes(eval);
-            if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016))
-                KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) += KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022);
-            else
-                KisakEval_SetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018), KisakEval_GetDouble(&eval->opStack[4 * eval->valStackPos
-                + 1018])
-                + KisakEval_GetDouble(&eval->opStack[4 * eval->valStackPos
-                + 1022]));
-        }
-        --eval->valStackPos;
-        goto LABEL_121;
-    case EVAL_OP_MINUS:
-        Eval_PrepareBinaryOpSameTypes(eval);
-        if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016))
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) -= KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022);
-        else
-            KisakEval_SetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018), KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018))
-            - KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022)));
-        --eval->valStackPos;
-        goto LABEL_121;
+        return true;
+
     case EVAL_OP_UNARY_PLUS:
-        goto LABEL_121;
+        return true;
     case EVAL_OP_UNARY_MINUS:
-        if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1020) == EVAL_OP_RPAREN)
+        if (top.type == EVAL_VALUE_STRING)
         {
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022) = (EvalOperatorType)(-KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022));
+            iassert(0);
+            return false;
         }
+        if (top.type == EVAL_VALUE_INT)
+            top.u.i = -top.u.i;
         else
-        {
-            if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1020))
-            {
-                v13 = "cannot negate strings";
-                //iassert(0); //iassert(0); //iassert(0); //iassert(0); //iassert(0); //_CxxThrowException(&v13, &PA.deinit);
-                iassert(0);
-            }
-            KisakEval_SetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022), -KisakEval_GetDouble(&eval->opStack[4 * eval->valStackPos
-                + 1022]));
-        }
-        goto LABEL_121;
-    case EVAL_OP_MULTIPLY:
-        Eval_PrepareBinaryOpSameTypes(eval);
-        if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016))
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) *= KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022);
-        else
-            KisakEval_SetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018), KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018))
-            * KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022)));
-        --eval->valStackPos;
-        goto LABEL_121;
-    case EVAL_OP_DIVIDE:
-        Eval_PrepareBinaryOpSameTypes(eval);
-        if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016))
-        {
-            if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022) == EVAL_OP_LPAREN)
-            {
-                v9 = "divide by zero";
-                //iassert(0); //iassert(0); //iassert(0); //iassert(0); //iassert(0); //_CxxThrowException(&v9, &PA.deinit);
-                iassert(0);
-            }
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) /= KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022);
-        }
-        else
-        {
-            if (0.0 == KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022)))
-            {
-                v10 = "divide by zero";
-                //iassert(0); //iassert(0); //iassert(0); //iassert(0); //iassert(0); //_CxxThrowException(&v10, &PA.deinit);
-                iassert(0);
-            }
-            KisakEval_SetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018), KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018))
-                / KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022)));
-        }
-        --eval->valStackPos;
-        goto LABEL_121;
-    case EVAL_OP_MODULUS:
-        Eval_PrepareBinaryOpSameTypes(eval);
-        if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016))
-        {
-            if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022) == EVAL_OP_LPAREN)
-            {
-                v7 = "divide by zero";
-                //iassert(0); //iassert(0); //iassert(0); //iassert(0); //iassert(0); //_CxxThrowException(&v7, &PA.deinit);
-                iassert(0);
-            }
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) %= KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022);
-        }
-        else
-        {
-            if (0.0 == KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022)))
-            {
-                v8 = "divide by zero";
-                //iassert(0); //iassert(0); //iassert(0); //iassert(0); //iassert(0); //_CxxThrowException(&v8, &PA.deinit);
-                iassert(0);
-            }
-            dQuotientFloor = floor(
-                KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018))
-                / KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022)));
-            KisakEval_SetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018), (double)(KisakEval_GetDouble(&eval->opStack[4 * eval->valStackPos
-                + 1018])
-                - KisakEval_GetDouble(&eval->opStack[4 * eval->valStackPos
-                + 1022])
-                * dQuotientFloor));
-        }
-        --eval->valStackPos;
-        goto LABEL_121;
-    case EVAL_OP_LSHIFT:
-        Eval_PrepareBinaryOpSameTypes(eval);
-        if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016))
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) <<= KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022);
-        else
-            KisakEval_SetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018), (double)(pow(
-                2.0,
-                KisakEval_GetDouble(&eval->opStack[4 * eval->valStackPos
-                + 1022]))
-            * KisakEval_GetDouble(&eval->opStack[4 * eval->valStackPos
-            + 1018])));
-        --eval->valStackPos;
-        goto LABEL_121;
-    case EVAL_OP_RSHIFT:
-        Eval_PrepareBinaryOpSameTypes(eval);
-        if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016))
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) >>= KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022);
-        else
-            KisakEval_SetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018), (double)(pow(
-                2.0,
-                -KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022)))
-            * KisakEval_GetDouble(&eval->opStack[4 * eval->valStackPos
-            + 1018])));
-        --eval->valStackPos;
-        goto LABEL_121;
+            top.u.d = -top.u.d;
+        return true;
+
     case EVAL_OP_BITWISE_NOT:
-        if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1020))
+        if (top.type == EVAL_VALUE_STRING)
         {
-            if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016) == EVAL_OP_COLON)
-            {
-                v11 = "cannot bitwise invert strings";
-                iassert(0); //iassert(0); //iassert(0); //iassert(0); //iassert(0); //_CxxThrowException(&v11, &PA.deinit);
-            }
+            iassert(0);
+            return false;
         }
-        else
+        if (top.type == EVAL_VALUE_DOUBLE)
         {
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022) = (EvalOperatorType)((int)KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022)));
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1020) = EVAL_OP_RPAREN;
+            top.u.i = static_cast<int>(top.u.d);
+            top.type = EVAL_VALUE_INT;
         }
-        KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022) = (EvalOperatorType)(~KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022));
-        goto LABEL_121;
-    case EVAL_OP_BITWISE_AND:
-        Eval_PrepareBinaryOpIntegers(eval);
-        KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) &= KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022);
-        --eval->valStackPos;
-        goto LABEL_121;
-    case EVAL_OP_BITWISE_OR:
-        Eval_PrepareBinaryOpIntegers(eval);
-        KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) |= KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022);
-        --eval->valStackPos;
-        goto LABEL_121;
-    case EVAL_OP_BITWISE_XOR:
-        Eval_PrepareBinaryOpIntegers(eval);
-        KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) ^= KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022);
-        --eval->valStackPos;
-        goto LABEL_121;
+        top.u.i = ~top.u.i;
+        return true;
+
     case EVAL_OP_LOGICAL_NOT:
-        if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1020))
+        if (top.type == EVAL_VALUE_STRING)
         {
-            if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1020) != EVAL_OP_RPAREN)
-            {
-                v12 = "cannot logical invert strings";
-                iassert(0); //iassert(0); //iassert(0); //iassert(0); //iassert(0); //_CxxThrowException(&v12, &PA.deinit);
-            }
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022) = (EvalOperatorType)(KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022) == EVAL_OP_LPAREN);
+            iassert(0);
+            return false;
         }
-        else
-        {
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022) = (EvalOperatorType)(0.0 == KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022)));
-        }
-        KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1020) = EVAL_OP_RPAREN;
-        goto LABEL_121;
-    case EVAL_OP_LOGICAL_AND:
-        Eval_PrepareBinaryOpBoolean(eval);
-        KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) &= KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022);
-        --eval->valStackPos;
-        goto LABEL_121;
-    case EVAL_OP_LOGICAL_OR:
-        Eval_PrepareBinaryOpBoolean(eval);
-        KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) |= KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022);
-        --eval->valStackPos;
-        goto LABEL_121;
-    case EVAL_OP_EQUALS:
-        if (eval->valStackPos >= 2
-            && KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016) == EVAL_OP_COLON
-            && KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1020) == EVAL_OP_COLON)
-        {
-            same = _stricmp(
-                (const char *)KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018),
-                (const char *)KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022)) == 0;
-            free((void *)KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018));
-            free((void *)KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022));
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016) = EVAL_OP_RPAREN;
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) = (EvalOperatorType)same;
-        }
-        else
-        {
-            Eval_PrepareBinaryOpSameTypes(eval);
-            if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016))
-            {
-                KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) = (EvalOperatorType)(KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) == KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022));
-            }
-            else
-            {
-                KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) = (EvalOperatorType)(KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022)) == KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018)));
-                KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016) = EVAL_OP_RPAREN;
-            }
-        }
-        --eval->valStackPos;
-        goto LABEL_121;
-    case EVAL_OP_NOT_EQUAL:
-        if (eval->valStackPos >= 2
-            && KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016) == EVAL_OP_COLON
-            && KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1020) == EVAL_OP_COLON)
-        {
-            v16 = _stricmp(
-                (const char *)KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018),
-                (const char *)KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022)) == 0;
-            free((void *)KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018));
-            free((void *)KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022));
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016) = EVAL_OP_RPAREN;
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) = (EvalOperatorType)!v16;
-        }
-        else
-        {
-            Eval_PrepareBinaryOpSameTypes(eval);
-            if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016))
-            {
-                KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) = (EvalOperatorType)(KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) != KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022));
-            }
-            else
-            {
-                KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) = (EvalOperatorType)(KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022)) != KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018)));
-                KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016) = EVAL_OP_RPAREN;
-            }
-        }
-        --eval->valStackPos;
-        goto LABEL_121;
-    case EVAL_OP_LESS:
-        Eval_PrepareBinaryOpSameTypes(eval);
-        if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016))
-        {
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) = (EvalOperatorType)(KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) < KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022));
-        }
-        else
-        {
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) = (EvalOperatorType)(KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022)) > KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018)));
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016) = EVAL_OP_RPAREN;
-        }
-        --eval->valStackPos;
-        goto LABEL_121;
-    case EVAL_OP_LESS_EQUAL:
-        Eval_PrepareBinaryOpSameTypes(eval);
-        if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016))
-        {
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) = (EvalOperatorType)(KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) <= KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022));
-        }
-        else
-        {
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) = (EvalOperatorType)(KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022)) >= KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018)));
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016) = EVAL_OP_RPAREN;
-        }
-        --eval->valStackPos;
-        goto LABEL_121;
-    case EVAL_OP_GREATER:
-        Eval_PrepareBinaryOpSameTypes(eval);
-        if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016))
-        {
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) = (EvalOperatorType)(KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) > KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022));
-        }
-        else
-        {
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) = (EvalOperatorType)(KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022)) < KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018)));
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016) = EVAL_OP_RPAREN;
-        }
-        --eval->valStackPos;
-        goto LABEL_121;
-    case EVAL_OP_GREATER_EQUAL:
-        Eval_PrepareBinaryOpSameTypes(eval);
-        if (KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016))
-        {
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) = (EvalOperatorType)(KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) >= KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022));
-        }
-        else
-        {
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018) = (EvalOperatorType)(KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1022)) <= KisakEval_GetDouble(&KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1018)));
-            KisakEval_OpAt(eval->opStack, 4 * eval->valStackPos + 1016) = EVAL_OP_RPAREN;
-        }
-        --eval->valStackPos;
-    LABEL_121:
-        result = 1;
+        top.u.i = top.type == EVAL_VALUE_INT ? top.u.i == 0 : top.u.d == 0.0;
+        top.type = EVAL_VALUE_INT;
+        return true;
+
+    default:
         break;
+    }
+
+    if (eval->valStackPos < 2)
+    {
+        iassert(0);
+        return false;
+    }
+
+    EvalValue &left = eval->valStack[eval->valStackPos - 2];
+    EvalValue &right = eval->valStack[eval->valStackPos - 1];
+    if (op == EVAL_OP_PLUS
+        && left.type == EVAL_VALUE_STRING && right.type == EVAL_VALUE_STRING)
+    {
+        const size_t leftLength = strlen(left.u.s);
+        const size_t rightLength = strlen(right.u.s);
+        char *joined = static_cast<char *>(malloc(leftLength + rightLength + 1));
+        if (!joined)
+        {
+            Com_Error(ERR_FATAL, "EXE_ERR_OUT_OF_MEMORY");
+            return false;
+        }
+        memcpy(joined, left.u.s, leftLength);
+        memcpy(joined + leftLength, right.u.s, rightLength + 1);
+        free(left.u.s);
+        free(right.u.s);
+        left.u.s = joined;
+        --eval->valStackPos;
+        return true;
+    }
+
+    if (op == EVAL_OP_EQUALS || op == EVAL_OP_NOT_EQUAL)
+    {
+        if (left.type == EVAL_VALUE_STRING || right.type == EVAL_VALUE_STRING)
+        {
+            if (left.type != EVAL_VALUE_STRING || right.type != EVAL_VALUE_STRING)
+            {
+                iassert(0);
+                return false;
+            }
+            const bool equal = _stricmp(left.u.s, right.u.s) == 0;
+            free(left.u.s);
+            free(right.u.s);
+            left.type = EVAL_VALUE_INT;
+            left.u.i = op == EVAL_OP_EQUALS ? equal : !equal;
+            --eval->valStackPos;
+            return true;
+        }
+    }
+
+    if (op == EVAL_OP_BITWISE_AND || op == EVAL_OP_BITWISE_OR || op == EVAL_OP_BITWISE_XOR)
+        Eval_PrepareBinaryOpIntegers(eval);
+    else if (op == EVAL_OP_LOGICAL_AND || op == EVAL_OP_LOGICAL_OR)
+        Eval_PrepareBinaryOpBoolean(eval);
+    else
+        Eval_PrepareBinaryOpSameTypes(eval);
+
+    if (left.type == EVAL_VALUE_STRING || right.type == EVAL_VALUE_STRING)
+        return false;
+
+    const bool integers = left.type == EVAL_VALUE_INT;
+    switch (op)
+    {
+    case EVAL_OP_PLUS:
+        if (integers) left.u.i += right.u.i; else left.u.d += right.u.d;
+        break;
+    case EVAL_OP_MINUS:
+        if (integers) left.u.i -= right.u.i; else left.u.d -= right.u.d;
+        break;
+    case EVAL_OP_MULTIPLY:
+        if (integers) left.u.i *= right.u.i; else left.u.d *= right.u.d;
+        break;
+    case EVAL_OP_DIVIDE:
+        if ((integers && right.u.i == 0) || (!integers && right.u.d == 0.0))
+        {
+            iassert(0);
+            return false;
+        }
+        if (integers) left.u.i /= right.u.i; else left.u.d /= right.u.d;
+        break;
+    case EVAL_OP_MODULUS:
+        if ((integers && right.u.i == 0) || (!integers && right.u.d == 0.0))
+        {
+            iassert(0);
+            return false;
+        }
+        if (integers)
+            left.u.i %= right.u.i;
+        else
+            left.u.d -= right.u.d * floor(left.u.d / right.u.d);
+        break;
+    case EVAL_OP_LSHIFT:
+        if (integers) left.u.i <<= right.u.i; else left.u.d *= pow(2.0, right.u.d);
+        break;
+    case EVAL_OP_RSHIFT:
+        if (integers) left.u.i >>= right.u.i; else left.u.d *= pow(2.0, -right.u.d);
+        break;
+    case EVAL_OP_BITWISE_AND:
+        left.u.i &= right.u.i;
+        break;
+    case EVAL_OP_BITWISE_OR:
+        left.u.i |= right.u.i;
+        break;
+    case EVAL_OP_BITWISE_XOR:
+        left.u.i ^= right.u.i;
+        break;
+    case EVAL_OP_LOGICAL_AND:
+        left.u.i = left.u.i && right.u.i;
+        break;
+    case EVAL_OP_LOGICAL_OR:
+        left.u.i = left.u.i || right.u.i;
+        break;
+    case EVAL_OP_EQUALS:
+    case EVAL_OP_NOT_EQUAL:
+    case EVAL_OP_LESS:
+    case EVAL_OP_LESS_EQUAL:
+    case EVAL_OP_GREATER:
+    case EVAL_OP_GREATER_EQUAL:
+    {
+        bool comparison = false;
+        if (integers)
+        {
+            if (op == EVAL_OP_EQUALS) comparison = left.u.i == right.u.i;
+            else if (op == EVAL_OP_NOT_EQUAL) comparison = left.u.i != right.u.i;
+            else if (op == EVAL_OP_LESS) comparison = left.u.i < right.u.i;
+            else if (op == EVAL_OP_LESS_EQUAL) comparison = left.u.i <= right.u.i;
+            else if (op == EVAL_OP_GREATER) comparison = left.u.i > right.u.i;
+            else comparison = left.u.i >= right.u.i;
+        }
+        else
+        {
+            if (op == EVAL_OP_EQUALS) comparison = left.u.d == right.u.d;
+            else if (op == EVAL_OP_NOT_EQUAL) comparison = left.u.d != right.u.d;
+            else if (op == EVAL_OP_LESS) comparison = left.u.d < right.u.d;
+            else if (op == EVAL_OP_LESS_EQUAL) comparison = left.u.d <= right.u.d;
+            else if (op == EVAL_OP_GREATER) comparison = left.u.d > right.u.d;
+            else comparison = left.u.d >= right.u.d;
+        }
+        left.type = EVAL_VALUE_INT;
+        left.u.i = comparison;
+        break;
+    }
     default:
         if (!alwaysfails)
             MyAssertHandler(".\\universal\\eval.cpp", 488, 0, "unknown operator type");
-        result = 0;
-        break;
+        return false;
     }
-    return result;
+
+    --eval->valStackPos;
+    return true;
 }
 
 char __cdecl Eval_PushOperator(Eval *eval, EvalOperatorType op)
@@ -4071,6 +3880,11 @@ char __cdecl Eval_PushOperator(Eval *eval, EvalOperatorType op)
     char precedence; // [esp+Eh] [ebp-2h]
     bool higherPrecedence; // [esp+Fh] [ebp-1h]
 
+    if (static_cast<unsigned int>(op) >= EVAL_OP_COUNT)
+    {
+        MyAssertHandler(".\\universal\\eval.cpp", 549, 0, "%s", "op >= 0 && op < ARRAY_COUNT( s_precedence )");
+        return 0;
+    }
     if (s_precedence[op] < 0)
         return 0;
     if (op == EVAL_OP_RPAREN && !eval->parenCount)
@@ -4090,8 +3904,6 @@ char __cdecl Eval_PushOperator(Eval *eval, EvalOperatorType op)
     {
         op = EVAL_OP_UNARY_MINUS;
     }
-    if ((unsigned int)op >= EVAL_OP_COUNT)
-        MyAssertHandler(".\\universal\\eval.cpp", 549, 0, "%s", "op >= 0 && op < ARRAY_COUNT( s_precedence )");
     precedence = s_precedence[op];
     while (eval->opStackPos > 0)
     {
@@ -4117,11 +3929,12 @@ char __cdecl Eval_PushOperator(Eval *eval, EvalOperatorType op)
     }
     if (op != EVAL_OP_COLON || (eval->opStackPos && eval->opStack[eval->opStackPos - 1] == EVAL_OP_QUESTION))
     {
-        if (eval->opStackPos == 1024)
+        if (eval->opStackPos >= 1024)
         {
             v4 = "evaluation stack overflow - expression is too complex";
             //iassert(0); //iassert(0); //iassert(0); //iassert(0); //iassert(0); //_CxxThrowException(&v4, &PA.deinit);
             iassert(0);
+            return 0;
         }
         eval->opStack[eval->opStackPos++] = op;
         eval->pushedOp = 1;
@@ -4149,7 +3962,10 @@ int __cdecl PC_Int_Expression_Parse(int handle, int *i)
     int v8; // [esp+504Ch] [ebp-41Ch]
     pc_token_s pc_token; // [esp+5050h] [ebp-418h] BYREF
 
-    memset(&eval.opStackPos, 0, 13);
+    eval.opStackPos = 0;
+    eval.valStackPos = 0;
+    eval.parenCount = 0;
+    eval.pushedOp = false;
     v8 = 0;
     while (1)
     {
@@ -4300,7 +4116,10 @@ int __cdecl PC_Float_Expression_Parse(int handle, float *f)
     int v8; // [esp+5054h] [ebp-41Ch]
     pc_token_s pc_token; // [esp+5058h] [ebp-418h] BYREF
 
-    memset(&eval.opStackPos, 0, 13);
+    eval.opStackPos = 0;
+    eval.valStackPos = 0;
+    eval.parenCount = 0;
+    eval.pushedOp = false;
     v8 = 0;
     while (1)
     {
@@ -4471,8 +4290,8 @@ void __cdecl free_expression(statement_s *statement)
         for (entryNum = 0; entryNum < statement->numEntries; ++entryNum)
         {
             entry = statement->entries[entryNum];
-            if (entry->type == 1 && entry->data.op == OP_MULTIPLY)
-                Z_Free((char *)(uintptr_t)entry->data.operand.internals.intVal, 34);
+            if (entry->type == 1 && entry->data.operand.dataType == VAL_STRING)
+                Z_Free((char *)entry->data.operand.internals.string, 34);
             Z_Free((char *)entry, 34);
             statement->entries[entryNum] = 0;
         }
@@ -4536,52 +4355,49 @@ void __cdecl Statement_AddEntry(statement_s *statement, expressionEntry *entry)
 
 void __cdecl Statement_AddOperator(statement_s *statement, operationEnum op)
 {
-    unsigned int *v2; // eax
-
-    v2 = (unsigned int*)Z_Malloc(12, "Statement_AddOperator", 34);
-    *v2 = 0;
-    v2[1] = op;
-    Statement_AddEntry(statement, (expressionEntry *)v2);
+    expressionEntry *entry = static_cast<expressionEntry *>(
+        Z_Malloc(sizeof(expressionEntry), "Statement_AddOperator", 34));
+    entry->type = 0;
+    entry->data.op = op;
+    Statement_AddEntry(statement, entry);
 }
 
 void __cdecl Statement_AddIntOperand(statement_s *statement, int val)
 {
-    unsigned int *v2; // eax
-
-    v2 = (unsigned int*)Z_Malloc(12, "Statement_AddIntOperand", 34);
-    *v2 = 1;
-    v2[1] = 0;
-    v2[2] = val;
-    Statement_AddEntry(statement, (expressionEntry *)v2);
+    expressionEntry *entry = static_cast<expressionEntry *>(
+        Z_Malloc(sizeof(expressionEntry), "Statement_AddIntOperand", 34));
+    entry->type = 1;
+    entry->data.operand.dataType = VAL_INT;
+    entry->data.operand.internals.intVal = val;
+    Statement_AddEntry(statement, entry);
 }
 
 void __cdecl Statement_AddFloatOperand(statement_s *statement, float val)
 {
-    unsigned int *v2; // eax
-
-    v2 = (unsigned int*)Z_Malloc(12, "Statement_AddFloatOperand", 34);
-    *v2 = 1;
-    v2[1] = 1;
-    *((float *)v2 + 2) = val;
-    Statement_AddEntry(statement, (expressionEntry *)v2);
+    expressionEntry *entry = static_cast<expressionEntry *>(
+        Z_Malloc(sizeof(expressionEntry), "Statement_AddFloatOperand", 34));
+    entry->type = 1;
+    entry->data.operand.dataType = VAL_FLOAT;
+    entry->data.operand.internals.floatVal = val;
+    Statement_AddEntry(statement, entry);
 }
 
 void __cdecl Statement_AddStringOperand(statement_s *statement, char *str)
 {
     expressionEntry *entry; // [esp+20h] [ebp-4h]
 
-    entry = (expressionEntry *)Z_Malloc(12, "Statement_AddStringOperand", 34);
+    entry = static_cast<expressionEntry *>(
+        Z_Malloc(sizeof(expressionEntry), "Statement_AddStringOperand", 34));
     entry->type = 1;
-    entry->data.op = OP_MULTIPLY;
+    entry->data.operand.dataType = VAL_STRING;
     entry->data.operand.internals.string = static_cast<const char *>(Z_Malloc(strlen(str) + 1, "Statement_AddStringOperand", 34));
-    I_strncpyz((char *)(uintptr_t)entry->data.operand.internals.intVal, str, strlen(str) + 1);
+    I_strncpyz((char *)entry->data.operand.internals.string, str, strlen(str) + 1);
     Statement_AddEntry(statement, entry);
 }
 
 char __cdecl parse_expression_internal(int handle, statement_s *statement, int maxEntries)
 {
     expressionEntry *v4; // edx
-    operandInternalDataUnion v5; // ecx
     char *ValueAsString; // eax
     int type; // [esp+8h] [ebp-42Ch]
     operationEnum op; // [esp+Ch] [ebp-428h]
@@ -4635,10 +4451,7 @@ char __cdecl parse_expression_internal(int handle, statement_s *statement, int m
                 if (type == 1)
                 {
                     v4 = statement->entries[statement->numEntries - 1];
-                    v5.intVal = (int)v4->data.operand.internals;
-                    lastOperand.dataType = v4->data.operand.dataType;
-                    lastOperand.internals = v5;
-                    //ValueAsString = GetValueAsString((Operand)__PAIR64__(v5.intVal, lastOperand.dataType));
+                    lastOperand = v4->data.operand;
                     ValueAsString = GetValueAsString(lastOperand);
                     Com_PrintError(16, "Probably UI Expression error: %s(...\n", ValueAsString);
                 }

@@ -27,7 +27,7 @@ void __cdecl SV_WriteSnapshotToClient(client_t *client, msg_t *msg)
     int lastframe; // [esp+8h] [ebp-4Ch]
     int from_num_entities; // [esp+Ch] [ebp-48h]
     int from_first_entity; // [esp+14h] [ebp-40h]
-    SnapshotInfo_s snapInfo; // [esp+18h] [ebp-3Ch] BYREF
+    SnapshotInfo_s snapInfo{}; // [esp+18h] [ebp-3Ch] BYREF
     int sendAsActive; // [esp+30h] [ebp-24h]
     int from_num_clients; // [esp+34h] [ebp-20h]
     clientSnapshot_t *remoteFrame; // [esp+38h] [ebp-1Ch]
@@ -55,7 +55,6 @@ void __cdecl SV_WriteSnapshotToClient(client_t *client, msg_t *msg)
             "%s\n\t(clientNum) = %i",
             "(clientNum >= 0 && clientNum < 64)",
             clientNum);
-    memset(&snapInfo.snapshotDeltaTime, 0, 16);
     snapInfo.clientNum = clientNum;
     snapInfo.client = &client->header;
     remoteFrame = &client->frames[client->header.netchan.outgoingSequence & 0x1F];
@@ -2047,4 +2046,3 @@ void __cdecl SV_SendClientMessages()
     if (sv_debugPacketContents->current.enabled || net_showprofile->current.integer)
         SV_EnablePacketData();
 }
-

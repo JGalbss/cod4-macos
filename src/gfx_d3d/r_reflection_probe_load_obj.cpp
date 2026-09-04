@@ -5,8 +5,10 @@
 void R_CreateDefaultProbes()
 {
     s_world.reflectionProbeCount = 1;
-    s_world.reflectionProbes = (GfxReflectionProbe *)Hunk_Alloc(0x10u, "R_CreateDefaultProbe", 20);
-    s_world.reflectionProbeTextures = (GfxTexture *)Hunk_Alloc(4u, "R_CreateDefaultProbe", 20);
+    s_world.reflectionProbes = reinterpret_cast<GfxReflectionProbe *>(
+        Hunk_Alloc(sizeof(*s_world.reflectionProbes), "R_CreateDefaultProbe", 20));
+    s_world.reflectionProbeTextures = reinterpret_cast<GfxTexture *>(
+        Hunk_Alloc(sizeof(*s_world.reflectionProbeTextures), "R_CreateDefaultProbe", 20));
     R_CreateDefaultProbe();
     rgl.reflectionProbesLoaded = 1;
 }
@@ -45,8 +47,10 @@ void __cdecl R_LoadReflectionProbes(unsigned int bspVersion)
     {
         reflectionProbeRawData = (const DiskGfxReflectionProbe * )Com_GetBspLump(LUMP_REFLECTION_PROBES, 0x20044u, &s_world.reflectionProbeCount);
         ++s_world.reflectionProbeCount;
-        s_world.reflectionProbes = (GfxReflectionProbe*)Hunk_Alloc(16 * s_world.reflectionProbeCount, "R_LoadReflectionProbes", 20);
-        s_world.reflectionProbeTextures = (GfxTexture*)Hunk_Alloc(4 * s_world.reflectionProbeCount, "R_LoadReflectionProbes", 20);
+        s_world.reflectionProbes = reinterpret_cast<GfxReflectionProbe *>(
+            Hunk_Alloc(sizeof(*s_world.reflectionProbes) * s_world.reflectionProbeCount, "R_LoadReflectionProbes", 20));
+        s_world.reflectionProbeTextures = reinterpret_cast<GfxTexture *>(
+            Hunk_Alloc(sizeof(*s_world.reflectionProbeTextures) * s_world.reflectionProbeCount, "R_LoadReflectionProbes", 20));
         R_CreateDefaultProbe();
         R_GenerateReflectionImages(
             s_world.reflectionProbes + 1,
@@ -58,8 +62,10 @@ void __cdecl R_LoadReflectionProbes(unsigned int bspVersion)
     {
         reflectionProbeRawData11 = Com_GetBspLump(LUMP_REFLECTION_PROBES, 0x20004u, &s_world.reflectionProbeCount);
         ++s_world.reflectionProbeCount;
-        s_world.reflectionProbes = (GfxReflectionProbe *)Hunk_Alloc(16 * s_world.reflectionProbeCount, "R_LoadReflectionProbes", 20);
-        s_world.reflectionProbeTextures = (GfxTexture *)Hunk_Alloc(4 * s_world.reflectionProbeCount, "R_LoadReflectionProbes", 20);
+        s_world.reflectionProbes = reinterpret_cast<GfxReflectionProbe *>(
+            Hunk_Alloc(sizeof(*s_world.reflectionProbes) * s_world.reflectionProbeCount, "R_LoadReflectionProbes", 20));
+        s_world.reflectionProbeTextures = reinterpret_cast<GfxTexture *>(
+            Hunk_Alloc(sizeof(*s_world.reflectionProbeTextures) * s_world.reflectionProbeCount, "R_LoadReflectionProbes", 20));
         reflectionProbeRawData12 = (DiskGfxReflectionProbe*)Hunk_AllocateTempMemory(131140 * s_world.reflectionProbeCount, "R_LoadReflectionProbes");
         for (i = 0; i < s_world.reflectionProbeCount - 1; ++i)
         {

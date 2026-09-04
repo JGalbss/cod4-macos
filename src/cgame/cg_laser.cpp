@@ -63,7 +63,7 @@ void __cdecl CG_Laser_Add_Core(
     FxPostLight postLight; // [esp+F0h] [ebp-34h] BYREF
     float laserEnd[3]; // [esp+118h] [ebp-Ch] BYREF
 
-    Com_Memset((unsigned int *)&traceResults, 0, 44);
+    Com_Memset(&traceResults, 0, sizeof(traceResults));
     if ((unsigned int)laserOwner > LASER_OWNER_PLAYER)
         MyAssertHandler(
             ".\\cgame\\cg_laser.cpp",
@@ -150,4 +150,3 @@ void __cdecl CG_Laser_Add_Core(
         FX_PostLight_Add(&postLight);
     }
 }
-

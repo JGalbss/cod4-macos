@@ -9,6 +9,8 @@
 // use one after OAT_FreeZone.
 #pragma once
 
+#include <stddef.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -23,8 +25,15 @@ typedef struct
     int isReference;
 } OatAsset;
 
+typedef void (*OatProgressCallback)(size_t current, size_t total, void *userData);
+
 // Returns null on failure and writes the reason into errOut.
 OatZone *OAT_LoadZone(const char *path, char *errOut, int errCap);
+
+// As above, while reporting the retail fastfile bytes OAT has decoded.  The
+// callback is synchronous and runs on the loading thread.
+OatZone *OAT_LoadZoneWithProgress(const char *path, char *errOut, int errCap,
+                                  OatProgressCallback progress, void *userData);
 
 int OAT_AssetCount(const OatZone *zone);
 

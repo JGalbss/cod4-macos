@@ -11,13 +11,17 @@ complete compatibility. Results below were observed during development through
   MoltenVK.
 - Profile creation, menus, textured UI, map loading, keyboard/mouse input,
   audio, local hosting, and remote joining have run on Apple Silicon.
-- The **New Experience** default Favorite was added for a fresh profile, and a
-  remote connection to that server completed during testing. Existing Favorites
-  remain untouched.
+- The **jgalbs** default Favorite was added to an exact copy of a user's valid
+  zero-Favorites cache and persisted to disk. A cache created by an earlier
+  build with the same address named **New Experience** was upgraded in place to
+  **jgalbs**, without a duplicate or changes to other Favorites. A remote
+  connection to that server also completed during testing.
 - The current integrated two-client standard-combat test exercised real bullet
   damage, authoritative death, score update, killcam entry/exit, and full-health
-  respawn. A final three-cycle run passed every check with artifacts in
-  `/tmp/kisak-native-combat.G0p9Nw`.
+  respawn. Binary SHA-256
+  `d1d67065f2c735d1c37e169cc5ee25d755ff1736693f7cf706713a83b16bb14b`
+  passed the final exact-binary cycle with artifacts in
+  `/tmp/kisak-native-combat.6mtC5X`.
 - The exact installed 0.1.0/build-1 baseline entered active FFA, Team
   Deathmatch, Domination, Headquarters, Search and Destroy, and Sabotage states
   on `mp_vacant`. Each mode rendered 3D gameplay, accepted scripted input, and
@@ -37,9 +41,7 @@ complete compatibility. Results below were observed during development through
   Create-a-Class path, not the complete unlock matrix at every rank.
 - Installed-app first-run probes verified explicit, saved, and `$HOME/Games/cod4`
   data discovery plus presentation of the retail-data chooser when no compatible
-  directory existed. Fresh profiles received one New Experience Favorite;
-  existing valid server caches, including a cache with zero Favorites, remained
-  unchanged.
+  directory existed. Fresh profiles received one jgalbs Favorite.
 - The installed client loaded ModWarfare's IWD, fastfile, and 115 scripts into
   active `mp_vacant` gameplay. The custom `mp_mw2_rust` load/main zones also
   reached active 3D gameplay. OpenWarfare2 discovered its five IWDs but did not
@@ -48,6 +50,14 @@ complete compatibility. Results below were observed during development through
 - Renderer/game binary SHA-256 `7f40b89e89f7ded2fa2fddfe88c83875f8f8fc374e51c426402471af1797a563`
   passed all 21 maps in the deterministic matrix for 1,200 frames each with
   seed `20260904`. Artifacts are in `/tmp/kisak-native-fuzz.RKET7T`.
+- The final exact binary above also passed a post-relink regression gate on
+  `mp_vacant`, `mp_crash`, and `mp_shipment` for 600 frames each. Its independent
+  fatal scan was empty and its hash was unchanged after the run. Evidence is in
+  `/tmp/kisak-native-fuzz-clean-rebuild.VPK7Mg`.
+- A real synchronous `mp_vacant` load capture showed the loading bar advancing
+  to an intermediate value while OAT decoded and registered assets, rather than
+  remaining empty until completion. The captured frame is
+  `/tmp/cod4-loading-frame-v2-converted.png`.
 - Focused vehicle-explosion captures at early and late effect lifetimes show
   authored orange fire, smoke, debris, and localized heat distortion without
   the previous gray cards, colored wedges, or full-screen corruption. Their
@@ -66,6 +76,13 @@ complete compatibility. Results below were observed during development through
   structure, removal of runtime and compiler build-machine paths, the DMG
   checksum, and `hdiutil verify`. The pinned runtime build is documented in the
   [SDL runtime guide](../mac/sdl2/README.md).
+- The final local 0.2.0/build-2 candidate DMG SHA-256 is
+  `7d02fb8b218e4a8ae2c991ebdb87ac7360a048674de588cf46a21d1986aeba4c`.
+  Its packaged executable SHA-256 is
+  `7542986855cb7dcbba8b9189d9ec41c399f5765651b0c7b36dc6f2853364d6a0`;
+  the difference from the raw tested binary is expected from install-name
+  rewriting and app-bundle signing. This candidate remains a local ad-hoc build,
+  not a public release.
 - The car-effect audit found no missing asset. The observed car debris and
   shellshock are authored effects, not a missing-resource fallback.
 

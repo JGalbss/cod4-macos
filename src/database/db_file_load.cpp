@@ -7,6 +7,10 @@
 #include <gfx_d3d/r_image.h>
 #include <gfx_d3d/r_buffers.h>
 
+#if defined(KISAK_OAT_ZONES)
+extern "C" double Posix_GetOatLoadFraction();
+#endif
+
 //uint32_t volatile g_loadingAssets      828e3f3c     db_file_load.obj
 //int32_t marker_db_file_load  828e3f40     db_file_load.obj
 
@@ -78,6 +82,12 @@ void __cdecl DB_LoadedExternalData(int32_t size)
 
 double __cdecl DB_GetLoadedFraction()
 {
+#if defined(KISAK_OAT_ZONES)
+    // The stock counters are advanced by DB_ReadXFileStage's 256 KiB reads.
+    // Native arm64 loads through OAT instead, so use its real decode/registration
+    // progress or the fastfile loading bar remains permanently empty.
+    return Posix_GetOatLoadFraction();
+#else
     double loadedBytesInternal; // [esp+14h] [ebp-20h]
     double totalBytesInternal; // [esp+1Ch] [ebp-18h]
     double loadedBytesExternal; // [esp+24h] [ebp-10h]
@@ -96,6 +106,7 @@ double __cdecl DB_GetLoadedFraction()
     if (totalBytesExternal < loadedBytesExternal)
         loadedBytesExternal = totalBytesExternal;
     return (float)((loadedBytesInternal + loadedBytesExternal) / (totalBytesInternal + totalBytesExternal));
+#endif
 }
 
 void __cdecl DB_LoadXFileData(uint8_t *pos, uint32_t size)
@@ -373,4 +384,3 @@ void __cdecl DB_LoadXFile(
     g_load.stream.next_in = buf;
     g_load.stream.avail_in = 0;
 }
-

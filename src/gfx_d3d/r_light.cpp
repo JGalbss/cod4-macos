@@ -733,12 +733,20 @@ void __cdecl R_GetStaticModelLightSurfs(const GfxLight **visibleLights, int visi
                     drawSurf = material->info.drawSurf;
                     //HIDWORD(drawSurf.packed) = ((staticModelId.surfType & 0xF) << 18) | HIDWORD(drawSurf.packed) & 0xFFC3FFFF;
                     drawSurf.fields.surfType = staticModelId.surfType;
-                    if (!R_AllocDrawSurf(&surfData.delayedCmdBuf, drawSurf, &surfData.drawSurfList, 3u))
+                    if (!R_AllocDrawSurf(
+                            &surfData.delayedCmdBuf,
+                            drawSurf,
+                            &surfData.drawSurfList,
+                            2u + sizeof(uintptr_t) / sizeof(unsigned int)))
                         break;
                     R_AddDelayedStaticModelDrawSurf(&surfData.delayedCmdBuf, &surfaces[surfaceIndex], (unsigned __int8*)list, 1u);
                     if (light->type == 2 && r_spotLightShadows->current.enabled && r_spotLightSModelShadows->current.enabled)
                     {
-                        if (!R_AllocDrawSurf(&shadowSurfData.delayedCmdBuf, drawSurf, &shadowSurfData.drawSurfList, 3u))
+                        if (!R_AllocDrawSurf(
+                                &shadowSurfData.delayedCmdBuf,
+                                drawSurf,
+                                &shadowSurfData.drawSurfList,
+                                2u + sizeof(uintptr_t) / sizeof(unsigned int)))
                             break;
                         R_AddDelayedStaticModelDrawSurf(
                             &shadowSurfData.delayedCmdBuf,
@@ -1414,7 +1422,7 @@ int __cdecl R_EmitPointLightPartitionSurfs(
         drawSurfCount = frontEndDataOut->drawSurfCount - firstDrawSurf;
         if (drawSurfCount)
         {
-            memcpy(partition, light, 0x40u);
+            partition->light = *light;
             partition->info.drawSurfs = &frontEndDataOut->drawSurfs[firstDrawSurf];
             partitions[partitionCount++].info.drawSurfCount = drawSurfCount;
         }

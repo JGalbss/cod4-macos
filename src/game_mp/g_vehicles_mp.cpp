@@ -640,7 +640,7 @@ int32_t __cdecl G_LoadVehicle(const char *name)
     pszBuffer = Com_LoadInfoString(string, "vehicle file", "VEHICLEFILE", loadBuffer);
     v11 = s_numVehicleInfos;
     dst = (uint8_t *)&s_vehicleInfos[s_numVehicleInfos];
-    memset(dst, 0, 0x270u);
+    memset(dst, 0, sizeof(s_vehicleInfos[s_numVehicleInfos]));
     v5 = name;
     v4 = dst;
     do
@@ -1025,8 +1025,8 @@ void __cdecl VEH_BackupPosition_0(gentity_s *ent)
     veh->phys.prevAngles[0] = ent->r.currentAngles[0];
     veh->phys.prevAngles[1] = ent->r.currentAngles[1];
     veh->phys.prevAngles[2] = ent->r.currentAngles[2];
-    qmemcpy(&s_backup_0, veh, 0xC0u);
-    qmemcpy(&s_backup_0.phys, &veh->phys, sizeof(s_backup_0.phys));
+    s_backup_0.pathPos = veh->pathPos;
+    s_backup_0.phys = veh->phys;
 }
 
 bool __cdecl AttachedStickyMissile_0(gentity_s *vehicle, gentity_s *missile)
@@ -1938,7 +1938,7 @@ void __cdecl VEH_GroundTrace(gentity_s *ent)
     point[1] = veh->phys.origin[1];
     point[2] = veh->phys.origin[2] - 0.25f;
     G_TraceCapsule(&trace, start, veh->phys.mins, veh->phys.maxs, point, ent->s.number, ent->clipmask);
-    memcpy(reinterpret_cast<unsigned char *>(&s_phys_0), &trace, 0x2Cu);
+    s_phys_0.groundTrace = trace;
     s_phys_0.hasGround = 0;
     s_phys_0.onGround = 0;
     if ((!trace.allsolid || VEH_CorrectAllSolid(ent, &trace))
@@ -2715,4 +2715,3 @@ void __cdecl G_VehCollmapSpawner(gentity_s *pSelf)
     pSelf->r.contents = 0;
     pSelf->s.eType = ET_VEHICLE_COLLMAP;
 }
-

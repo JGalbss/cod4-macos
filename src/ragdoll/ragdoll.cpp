@@ -1007,7 +1007,7 @@ void __cdecl Ragdoll_Init()
     {
         if (ragdoll_enable->current.enabled && ragdoll_max_simulating->current.integer < 8)
             Dvar_SetInt((dvar_s *)ragdoll_max_simulating, 8);
-        memset((unsigned __int8 *)ragdollBodies, 0, 0x13A80u);
+        memset(ragdollBodies, 0, sizeof(ragdollBodies));
         for (i = 0; i < 2; ++i)
         {
             ragdollDefs[i].bound = 0;

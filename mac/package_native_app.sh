@@ -76,12 +76,15 @@ chmod 755 "${stage_app}/Contents/MacOS/${executable_name}"
 # Build a complete Retina icon family from the explicitly supplied authorized image.
 # Retail game data is never copied into the application.
 iconset_dir="${stage_dir}/jgalbs-cod4.iconset"
+rounded_icon="${stage_dir}/jgalbs-cod4-rounded.png"
 mkdir -p "${iconset_dir}"
+/usr/bin/xcrun swift "${repo_dir}/mac/tools/make-rounded-icon.swift" \
+    "${icon_source}" "${rounded_icon}"
 for icon_size in 16 32 128 256 512; do
-    sips -s format png -z "${icon_size}" "${icon_size}" "${icon_source}" \
+    sips -s format png -z "${icon_size}" "${icon_size}" "${rounded_icon}" \
         --out "${iconset_dir}/icon_${icon_size}x${icon_size}.png" >/dev/null
     retina_size=$((icon_size * 2))
-    sips -s format png -z "${retina_size}" "${retina_size}" "${icon_source}" \
+    sips -s format png -z "${retina_size}" "${retina_size}" "${rounded_icon}" \
         --out "${iconset_dir}/icon_${icon_size}x${icon_size}@2x.png" >/dev/null
 done
 iconutil -c icns "${iconset_dir}" -o "${stage_app}/Contents/Resources/jgalbs-cod4.icns"

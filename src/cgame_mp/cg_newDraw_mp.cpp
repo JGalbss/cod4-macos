@@ -1075,7 +1075,7 @@ void __cdecl CG_DrawStanceHintPrints(
     const char *binding; // [esp+254h] [ebp-8h]
     float y; // [esp+258h] [ebp-4h]
 
-    memset(standCmds, 0, 24);
+    memset(standCmds[0], 0, sizeof(standCmds[0]));
     standCmds[1][0] = "gocrouch";
     standCmds[1][1] = "togglecrouch";
     standCmds[1][2] = "lowerstance";

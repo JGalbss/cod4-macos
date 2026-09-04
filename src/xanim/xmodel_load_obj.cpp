@@ -81,10 +81,10 @@ void __cdecl XModelReadSurface_BuildCollisionTree(
     iassert(!surface->deformed);
     iassert(vertListIndex >= 0 && vertListIndex < surface->vertListCount);
     vertList = &surface->vertList[vertListIndex];
-    tree = (XSurfaceCollisionTree*)Alloc(40);
+    tree = (XSurfaceCollisionTree*)Alloc(sizeof(*tree));
     vertList->collisionTree = tree;
     iassert(surface->triCount > 0);
-    memset(&options, 0, 12);
+    memset(&options, 0, sizeof(options));
     options.mins = 0;
     options.maxs = 0;
     options.maintainValidBounds = 1;
@@ -1332,7 +1332,7 @@ XModel *__cdecl XModelLoadFile(char *name, void *(__cdecl *Alloc)(int), void *(_
             iassert(config.entries[0].filename[0]);
             model->numsurfs = numsurfs;
             model->surfs = (XSurface *)Alloc(sizeof(XSurface) * numsurfs);
-            model->materialHandles = (Material **)Alloc(4 * numsurfs);
+            model->materialHandles = (Material **)Alloc(sizeof(*model->materialHandles) * numsurfs);
             surfIndex = 0;
             for (i = 0; i < 4; ++i)
             {

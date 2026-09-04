@@ -878,6 +878,12 @@ if(EXISTS "${OAT_LIB_DIR}/libZoneLoading.a")
     target_compile_definitions(kisak_posix PRIVATE KISAK_OAT_ZONES)
     message(STATUS "OpenAssetTools zone loading enabled (${OAT_LIB_DIR})")
 else()
+    if(APPLE AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+        message(FATAL_ERROR
+            "OpenAssetTools is required for the 64-bit macOS client. The stock "
+            "zone reader contains x86 pointer layouts and must not be enabled. "
+            "Build OAT first with oat/mac-build.sh (expected ${OAT_LIB_DIR}).")
+    endif()
     message(WARNING "OpenAssetTools not built at ${OAT_LIB_DIR} - zones will not load. Run oat/mac-build.sh.")
 endif()
 
@@ -903,8 +909,9 @@ set_target_properties(kisak_posix PROPERTIES
 
 if(APPLE AND EXISTS "${CMAKE_SOURCE_DIR}/mac/assets/jgalbs-cod4-icon.png")
     add_custom_command(TARGET kisak_posix POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        COMMAND /usr/bin/xcrun swift
+            "${CMAKE_SOURCE_DIR}/mac/tools/make-rounded-icon.swift"
             "${CMAKE_SOURCE_DIR}/mac/assets/jgalbs-cod4-icon.png"
             "$<TARGET_FILE_DIR:kisak_posix>/jgalbs-cod4-icon.png"
-        COMMENT "Staging the jgalbs cod4 raw-launch icon")
+        COMMENT "Staging the rounded jgalbs cod4 raw-launch icon")
 endif()

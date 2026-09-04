@@ -376,6 +376,10 @@ void dFactorLDLT (dReal *A, dReal *d, int n, int nskip1)
     /* done factorizing 1 x 1 block */
     break;
     
-    default: *((char*)0)=0;  /* this should never happen! */
+    default:
+      /* Generated ODE code used a null write here as an assertion. Returning is
+       * deterministic in release builds and avoids deliberate undefined behavior. */
+      dIASSERT(0);
+      return;
   }
 }

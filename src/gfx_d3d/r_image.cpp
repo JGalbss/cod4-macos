@@ -629,7 +629,7 @@ GfxImage *__cdecl Image_Alloc(
 
     iassert( name );
     v5 = strlen(name);
-    image = (GfxImage *)Hunk_Alloc(v5 + 37, "Image_Alloc", 22);
+    image = reinterpret_cast<GfxImage *>(Hunk_Alloc(sizeof(*image) + v5 + 1, "Image_Alloc", 22));
     iassert( image );
     image->name = (const char *)&image[1];
     Image_Construct(name, v5 + 1, category, semantic, imageTrack, image);

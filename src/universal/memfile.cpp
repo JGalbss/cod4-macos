@@ -228,7 +228,7 @@ void __cdecl MemFile_deflateInit(unsigned __int8* next_out, unsigned int avail_o
         memset((unsigned __int8*)&stream, 0, sizeof(stream));
         stream.next_out = next_out;
         stream.avail_out = avail_out;
-        if (deflateInit_(&stream, 1, "1.1.4", 52))
+        if (deflateInit_(&stream, 1, ZLIB_VERSION, static_cast<int>(sizeof(stream))))
             MyAssertHandler(".\\universal\\memfile.cpp", 224, 0, "%s", "err == Z_OK");
     }
     SetStreamMode(MEM_FILE_MODE_DEFLATE);
@@ -359,7 +359,7 @@ void __cdecl MemFile_inflateInit(unsigned __int8* next_in, unsigned int len, boo
         memset((unsigned __int8*)&stream, 0, sizeof(stream));
         stream.next_in = next_in;
         stream.avail_in = len;
-        if (inflateInit_(&stream, "1.1.4", 52))
+        if (inflateInit_(&stream, ZLIB_VERSION, static_cast<int>(sizeof(stream))))
             MyAssertHandler(".\\universal\\memfile.cpp", 387, 0, "%s", "err == Z_OK");
     }
     SetStreamMode(MEM_FILE_MODE_INFLATE);
@@ -802,8 +802,6 @@ void __cdecl MemFile_WriteCString(MemoryFile* memFile, const char* string)
 
 const char* __cdecl MemFile_ReadCString(MemoryFile* memFile)
 {
-    unsigned __int8* string; // [esp+0h] [ebp-4h]
-
     if (!memFile)
         MyAssertHandler(".\\universal\\memfile.cpp", 824, 0, "%s", "memFile");
     if (!memFile->buffer)
@@ -817,18 +815,20 @@ const char* __cdecl MemFile_ReadCString(MemoryFile* memFile)
             memFile->bytesUsed,
             0,
             memFile->bufferSize);
-    string = g_saveBuffer;
-    while (1)
+    unsigned __int8 *string = g_saveBuffer;
+    const unsigned __int8 *const stringEnd = g_saveBuffer + sizeof(g_saveBuffer);
+    while (string < stringEnd)
     {
         MemFile_ReadData(memFile, 1, string);
         if (memFile->memoryOverflow)
             return "";
         if (!*string)
-            break;
-        if (++string >= (unsigned __int8*)&g_nonZeroCount)
-            Com_Error(ERR_DROP, "Trying to read corrupted file");
+            return reinterpret_cast<const char *>(g_saveBuffer);
+        ++string;
     }
-    return (const char*)g_saveBuffer;
+
+    Com_Error(ERR_DROP, "Trying to read corrupted file");
+    return "";
 }
 
 void __cdecl MemFile_ReadData(MemoryFile* memFile, int byteCount, unsigned __int8* p)

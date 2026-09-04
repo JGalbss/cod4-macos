@@ -13,8 +13,8 @@ through Metal without Wine, DXVK, Vulkan, or MoltenVK.
   user-configurable 250 FPS default cap.
 - A first-launch retail-data chooser; no Call of Duty 4 retail assets are
   bundled or downloaded.
-- A default New Experience favorite for fresh profiles while preserving
-  existing Favorites lists.
+- A default jgalbs favorite on fresh and upgraded profiles while
+  preserving every other Favorites entry and preventing duplicates.
 - A self-contained app bundle with pinned SDL runtimes and signed Sparkle
   update support.
 

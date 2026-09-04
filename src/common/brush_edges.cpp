@@ -75,7 +75,7 @@ adjacencyWinding_t *__cdecl BuildBrushdAdjacencyWindingForSide(
             v21 = TestConvexWithoutNearPoints((const SimplePlaneIntersection **)cycle[1], cycleCount[1]);
             if (CycleLess(v20, v21, perimiter1, perimiter2, cycleCount[0], cycleCount[1]))
             {
-                memcpy((unsigned __int8 *)cycle, (unsigned __int8 *)cycle[1], 4 * cycleCount[1]);
+                memcpy(cycle[0], cycle[1], sizeof(cycle[0][0]) * cycleCount[1]);
                 cycleCount[0] = cycleCount[1];
             }
         }
@@ -291,7 +291,7 @@ const SimplePlaneIntersection *__cdecl RemoveNextPointFormedByThisPlane(
     if (begina == end)
         return 0;
     returnVal = *begina;
-    memmove((unsigned __int8 *)begina, (unsigned __int8 *)begina + 4, 4 * (end - (begina + 1)));
+    memmove(begina, begina + 1, sizeof(*begina) * (end - (begina + 1)));
     return returnVal;
 }
 
@@ -576,90 +576,83 @@ char __cdecl FindCycleBFS(
     const SimplePlaneIntersection **resultCycle,
     int32_t *resultCycleCount)
 {
-    const SimplePlaneIntersection **v9; // [esp+0h] [ebp-4028h]
-    const SimplePlaneIntersection **enda; // [esp+4h] [ebp-4024h]
-    const SimplePlaneIntersection *v11; // [esp+8h] [ebp-4020h] BYREF
-    int32_t planeIndex; // [esp+Ch] [ebp-401Ch]
-    int32_t v13; // [esp+10h] [ebp-4018h]
-    (void)v13;   // hex-rays scratch; unread
-    uint32_t v14[4094]; // [esp+14h] [ebp-4014h]
-    int32_t v15; // [esp+400Ch] [ebp-1Ch]
-    const SimplePlaneIntersection *v16; // [esp+4010h] [ebp-18h]
-    const SimplePlaneIntersection **i; // [esp+4014h] [ebp-14h]
-    int32_t j; // [esp+4018h] [ebp-10h]
-    int32_t v19; // [esp+401Ch] [ebp-Ch]
-    int32_t v20; // [esp+4020h] [ebp-8h]
-    int32_t v21; // [esp+4024h] [ebp-4h]
+    struct BfsNode
+    {
+        const SimplePlaneIntersection *point;
+        int32_t plane;
+        int32_t depth;
+        BfsNode *parent;
+    };
+
+    BfsNode queue[1024];
+    int32_t queueRead = 0;
+    int32_t queueCount = 1;
+    const int32_t goalPlane = ThirdPlane(end, basePlane, connectingPlane);
 
     if (!IsPtFormedByThisPlane(connectingPlane, start))
         MyAssertHandler("..\\common\\brush_edges.cpp", 266, 0, "%s", "IsPtFormedByThisPlane( connectingPlane, start )");
     if (!IsPtFormedByThisPlane(connectingPlane, end))
         MyAssertHandler("..\\common\\brush_edges.cpp", 267, 0, "%s", "IsPtFormedByThisPlane( connectingPlane, end )");
-    v11 = start;
-    planeIndex = ThirdPlane(start, basePlane, connectingPlane);
-    v13 = 1;
-    v14[0] = 0;
-    v20 = 0;
-    v21 = 1;
-    v19 = ThirdPlane(end, basePlane, connectingPlane);
-LABEL_6:
-    if (v21 <= v20)
+    queue[0].point = start;
+    queue[0].plane = ThirdPlane(start, basePlane, connectingPlane);
+    queue[0].depth = 1;
+    queue[0].parent = nullptr;
+
+    while (queueRead < queueCount)
     {
-        *resultCycleCount = 0;
-        return 0;
-    }
-    else
-    {
-        enda = &pts[ptsCount];
-        for (i = NextPointFormedByThisPlane(*(&planeIndex + 4 * v20), pts, enda);
-            ;
-            i = NextPointFormedByThisPlane(*(&planeIndex + 4 * v20), i + 1, enda))
+        const SimplePlaneIntersection **const ptsEnd = &pts[ptsCount];
+        for (const SimplePlaneIntersection **i = NextPointFormedByThisPlane(queue[queueRead].plane, pts, ptsEnd);
+             i != ptsEnd;
+             i = NextPointFormedByThisPlane(queue[queueRead].plane, i + 1, ptsEnd))
         {
-            if (i == enda)
+            const int32_t nextPlane = ThirdPlane(*i, basePlane, queue[queueRead].plane);
+            if (nextPlane != connectingPlane)
             {
-                ++v20;
-                goto LABEL_6;
-            }
-            v15 = ThirdPlane(*i, basePlane, *(&planeIndex + 4 * v20));
-            if (v15 != connectingPlane)
-            {
-                for (j = 0; j < v21 && *(&planeIndex + 4 * j) != v15; ++j)
+                int32_t j = 0;
+                for (; j < queueCount && queue[j].plane != nextPlane; ++j)
                     ;
-                if (j >= v21)
+                if (j >= queueCount)
                 {
-                    if (v21 >= 0x400)
+                    if (queueCount >= static_cast<int32_t>(ARRAY_COUNT(queue)))
+                    {
                         MyAssertHandler(
                             "..\\common\\brush_edges.cpp",
                             299,
                             0,
                             "queueHead doesn't index ARRAY_COUNT( queue )\n\t%i not in [0, %i)",
-                            v21,
+                            queueCount,
                             1024);
-                    *(&v11 + 4 * v21) = *i;
-                    *(&planeIndex + 4 * v21) = v15;
-                    v14[4 * v21 - 1] = v14[4 * v20 - 1] + 1;
-                    v14[4 * v21++] = (uint32_t)((uintptr_t)&v11 + 4 * v20); // KISAKTODO: sus cast (truncates pointer on 64-bit)
-                    if (v15 == v19)
-                        break;
+                        *resultCycleCount = 0;
+                        return 0;
+                    }
+                    BfsNode &node = queue[queueCount++];
+                    node.point = *i;
+                    node.plane = nextPlane;
+                    node.depth = queue[queueRead].depth + 1;
+                    node.parent = &queue[queueRead];
+                    if (nextPlane == goalPlane)
+                    {
+                        BfsNode *pathNode = &node;
+                        int32_t cycleIndex = node.depth;
+                        *resultCycleCount = cycleIndex + 1;
+                        while (pathNode)
+                        {
+                            resultCycle[cycleIndex--] = pathNode->point;
+                            pathNode = pathNode->parent;
+                        }
+                        if (cycleIndex != 0)
+                            MyAssertHandler("..\\common\\brush_edges.cpp", 326, 1, "%s", "cycleIndex == 0");
+                        resultCycle[0] = end;
+                        return 1;
+                    }
                 }
             }
         }
-        v9 = &v11 + 4 * v21 - 4;
-        if ((int)(uintptr_t)v9[1] != v19) // KISAKTODO: sus cast (truncates pointer on 64-bit)
-            MyAssertHandler("..\\common\\brush_edges.cpp", 318, 1, "%s", "node->plane == goalPlane");
-        *resultCycleCount = (int)(uintptr_t)(v9[2]->xyz + 1); // KISAKTODO: sus cast
-        v16 = v9[2];
-        while (v9)
-        {
-            resultCycle[(uint32_t)(uintptr_t)v16] = *v9; // KISAKTODO: sus cast
-            v16 = (v16 - 1);
-            v9 = &v9[3];
-        }
-        if (v16)
-            MyAssertHandler("..\\common\\brush_edges.cpp", 326, 1, "%s", "cycleIndex == 0");
-        *resultCycle = end;
-        return 1;
+        ++queueRead;
     }
+
+    *resultCycleCount = 0;
+    return 0;
 }
 
 int32_t __cdecl RemovePtsWithPlanesThatOccurLessThanTwice(const SimplePlaneIntersection **pts, int32_t ptsCount)
@@ -677,7 +670,7 @@ int32_t __cdecl RemovePtsWithPlanesThatOccurLessThanTwice(const SimplePlaneInter
         }
         else
         {
-            memmove(&pts[ptsIndex], &pts[ptsIndex + 1], 4 * (ptsCount - ptsIndex) - 4);
+            memmove(&pts[ptsIndex], &pts[ptsIndex + 1], sizeof(*pts) * (ptsCount - ptsIndex - 1));
             --ptsCount;
             ptsIndex = 0;
         }
@@ -814,7 +807,7 @@ int32_t __cdecl PartitionEdges(
                 if (i < v10 - 1)
                 {
                     v8 = edges[v14];
-                    memmove(&edges[partition[i] + 1], &edges[partition[i]], 4 * (v14 - partition[i]));
+                    memmove(&edges[partition[i] + 1], &edges[partition[i]], sizeof(*edges) * (v14 - partition[i]));
                     edges[partition[i]] = v8;
                 }
                 for (j = i; j < v10; ++j)
@@ -837,7 +830,7 @@ int32_t __cdecl Remove(const SimplePlaneIntersection **pts, int32_t ptsCount, co
         ;
     if (ptsIndex == ptsCount)
         return ptsCount;
-    memmove(&pts[ptsIndex], &pts[ptsIndex + 1], 4 * (ptsCount - ptsIndex) - 4);
+    memmove(&pts[ptsIndex], &pts[ptsIndex + 1], sizeof(*pts) * (ptsCount - ptsIndex - 1));
     ptsCounta = ptsCount - 1;
     if (ptsCounta >= 3)
         return RemovePtsWithPlanesThatOccurLessThanTwice(pts, ptsCounta);
@@ -847,7 +840,7 @@ int32_t __cdecl Remove(const SimplePlaneIntersection **pts, int32_t ptsCount, co
 
 int32_t __cdecl NumberOfUniquePoints(const SimplePlaneIntersection **pts, int32_t ptsCount)
 {
-    uint32_t v3[1025]; // [esp+10h] [ebp-1010h]
+    const SimplePlaneIntersection *v3[1025]; // [esp+10h] [ebp-1010h]
     int32_t v4; // [esp+1014h] [ebp-Ch]
     int32_t j; // [esp+1018h] [ebp-8h]
     int32_t i; // [esp+101Ch] [ebp-4h]
@@ -859,11 +852,10 @@ int32_t __cdecl NumberOfUniquePoints(const SimplePlaneIntersection **pts, int32_
     v4 = 0;
     for (i = 0; i < ptsCount; ++i)
     {
-        for (j = 0; j < v4 && !VecNCompareCustomEpsilon(pts[i]->xyz, (const float*)(uintptr_t)v3[j], 0.0099999998f, 3); ++j) // KISAKTODO: more sus casts
+        for (j = 0; j < v4 && !VecNCompareCustomEpsilon(pts[i]->xyz, v3[j]->xyz, 0.0099999998f, 3); ++j)
             ;
         if (j == v4)
-            v3[v4++] = (uint32_t)(uintptr_t)pts[i];
+            v3[v4++] = pts[i];
     }
     return v4;
 }
-

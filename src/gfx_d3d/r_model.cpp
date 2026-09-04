@@ -71,13 +71,18 @@ static bool __cdecl R_ModelSort(XModel *model1, XModel *model2)
     return MemUsage < XModelGetMemUsage(model2);
 }
 
+struct ModelList
+{
+    int count;
+    XModel *sorted[2050];
+};
+
 void __cdecl R_ModelList_f()
 {
     const char *Name; // eax
     const char *v1; // [esp+Ch] [ebp-212Ch]
     const char *fmt; // [esp+10h] [ebp-2128h]
-    int inData; // [esp+108h] [ebp-2030h] BYREF
-    XModel *v4[2050]; // [esp+10Ch] [ebp-202Ch] BYREF
+    ModelList modelList{};
     XModel *model; // [esp+2114h] [ebp-24h]
     int v6; // [esp+2118h] [ebp-20h]
     int v7; // [esp+211Ch] [ebp-1Ch]
@@ -90,18 +95,16 @@ void __cdecl R_ModelList_f()
 
     v7 = 0;
     v6 = 0;
-    inData = 0;
-    DB_EnumXAssets(ASSET_TYPE_XMODEL, (void(__cdecl *)(XAssetHeader, void *))R_GetModelList, &inData, 1);
-    //std::_Sort<XModel **, int, bool(__cdecl *)(XModel *&, XModel *&)>(v4, &v4[inData], (4 * inData) >> 2, R_ModelSort);
-    std::sort(&v4[0], &v4[inData], R_ModelSort);
+    DB_EnumXAssets(ASSET_TYPE_XMODEL, R_GetModelList, &modelList, 1);
+    std::sort(&modelList.sorted[0], &modelList.sorted[modelList.count], R_ModelSort);
     Com_Printf(8, "---------------------------\n");
     Com_Printf(8, "SM# is the number of static model instances\n");
     Com_Printf(8, "instKB is static model instance usage\n");
     Com_Printf(8, "DE# is the number of dyn entity instances\n");
     Com_Printf(8, "   SM#  instKB   DE#   geoKB  name\n");
-    for (i = 0; i < inData; ++i)
+    for (i = 0; i < modelList.count; ++i)
     {
-        model = v4[i];
+        model = modelList.sorted[i];
         MemUsage = XModelGetMemUsage(model);
         v7 += MemUsage;
         MemoryUsage = R_StaticModelGetMemoryUsage(model, &modelCount);
@@ -141,10 +144,12 @@ void __cdecl R_ModelList_f()
     Com_Printf(8, "Related commands: meminfo, imagelist, gfx_world, gfx_model, cg_drawfps, com_statmon, tempmeminfo\n");
 }
 
-void __cdecl R_GetModelList(XAssetHeader header, XAssetHeader *data)
+void __cdecl R_GetModelList(XAssetHeader header, void *data)
 {
-    //iassert( modelList->count < ARRAY_COUNT( modelList->sorted ) ); // KISAKTODO
-    data[(int)(uintptr_t)data->xmodelPieces++ + 1] = header;
+    ModelList *const modelList = static_cast<ModelList *>(data);
+    iassert(modelList->count < static_cast<int>(ARRAYSIZE(modelList->sorted)));
+    if (modelList->count < static_cast<int>(ARRAYSIZE(modelList->sorted)))
+        modelList->sorted[modelList->count++] = header.model;
 }
 
 XModel *__cdecl R_RegisterModel(const char *name)
@@ -415,7 +420,7 @@ void __cdecl R_LockSkinnedCache()
         PROF_SCOPED("LockSkinnedCache");
 
         gfxBuf.skinnedCacheLockAddr = (unsigned char *)R_LockVertexBuffer(vb, 0, 0, 0x2000);
-        if (((unsigned int)(uintptr_t)gfxBuf.skinnedCacheLockAddr & 0xF) != 0)
+        if ((reinterpret_cast<uintptr_t>(gfxBuf.skinnedCacheLockAddr) & 0xFu) != 0)
         {
             R_UnlockVertexBuffer(vb);
             gfxBuf.skinnedCacheLockAddr = 0;

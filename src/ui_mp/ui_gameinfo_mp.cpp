@@ -133,8 +133,6 @@ void __cdecl UI_LoadArenas()
 // value, so changing to void avoids GCC's -Wreturn-local-addr.
 void UI_LoadArenasFromFile_LoadObj()
 {
-    [[maybe_unused]] char *result; // eax
-    const char *v1; // [esp+14h] [ebp-24A4h]
     char string[132]; // [esp+18h] [ebp-24A0h] BYREF
     char *v3; // [esp+9Ch] [ebp-241Ch]
     char listbuf[1024]; // [esp+A0h] [ebp-2418h] BYREF
@@ -143,15 +141,13 @@ void UI_LoadArenasFromFile_LoadObj()
     int f; // [esp+24ACh] [ebp-Ch] BYREF
     int v8; // [esp+24B0h] [ebp-8h]
     unsigned int v9; // [esp+24B4h] [ebp-4h]
+    int fileCount;
 
     ui_numArenas = 0;
-    // FS_GetFileList returns int (count); hex-rays decompiled as char*.
-    // Bridge through uintptr_t.
-    result = (char *)(uintptr_t)FS_GetFileList("mp", "arena", FS_LIST_PURE_ONLY, listbuf, 1024);
-    v1 = result;
+    fileCount = FS_GetFileList("mp", "arena", FS_LIST_PURE_ONLY, listbuf, 1024);
     v3 = listbuf;
     v8 = 0;
-    while (v8 < (int)(uintptr_t)v1)
+    while (v8 < fileCount)
     {
         v9 = strlen(v3);
         snprintf(string, ARRAYSIZE(string), "%s/%s", "mp", v3);
@@ -176,8 +172,7 @@ void UI_LoadArenasFromFile_LoadObj()
             Com_PrintError(13, "file not found: %s\n", string);
         }
         ++v8;
-        result = &v3[v9 + 1];
-        v3 = result;
+        v3 += v9 + 1;
     }
 }
 

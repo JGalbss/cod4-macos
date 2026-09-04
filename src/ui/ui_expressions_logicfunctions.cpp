@@ -1075,7 +1075,8 @@ void __cdecl and_StringWithInt(Operand *leftSide, Operand *rightSide, Operand *r
             "(rightSide->dataType == VAL_INT)",
             rightSide->dataType);
     result->dataType = VAL_INT;
-    v3 = *(_BYTE *)(uintptr_t)leftSide->internals.intVal && rightSide->internals.intVal;
+    v3 = leftSide->internals.string && leftSide->internals.string[0]
+        && rightSide->internals.intVal;
     result->internals.intVal = v3;
 }
 
@@ -1105,7 +1106,8 @@ void __cdecl and_StringWithFloat(Operand *leftSide, Operand *rightSide, Operand 
             "(rightSide->dataType == VAL_FLOAT)",
             rightSide->dataType);
     result->dataType = VAL_INT;
-    v3 = *(_BYTE *)(uintptr_t)leftSide->internals.intVal && rightSide->internals.floatVal != 0.0;
+    v3 = leftSide->internals.string && leftSide->internals.string[0]
+        && rightSide->internals.floatVal != 0.0;
     result->internals.intVal = v3;
 }
 
@@ -1215,7 +1217,8 @@ void __cdecl or_StringWithInt(Operand *leftSide, Operand *rightSide, Operand *re
             "(rightSide->dataType == VAL_INT)",
             rightSide->dataType);
     result->dataType = VAL_INT;
-    v3 = *(_BYTE *)(uintptr_t)leftSide->internals.intVal || rightSide->internals.intVal;
+    v3 = (leftSide->internals.string && leftSide->internals.string[0])
+        || rightSide->internals.intVal;
     result->internals.intVal = v3;
 }
 
@@ -1245,7 +1248,8 @@ void __cdecl or_StringWithFloat(Operand *leftSide, Operand *rightSide, Operand *
             "(rightSide->dataType == VAL_FLOAT)",
             rightSide->dataType);
     result->dataType = VAL_INT;
-    v3 = *(_BYTE *)(uintptr_t)leftSide->internals.intVal || rightSide->internals.floatVal != 0.0;
+    v3 = (leftSide->internals.string && leftSide->internals.string[0])
+        || rightSide->internals.floatVal != 0.0;
     result->internals.intVal = v3;
 }
 
@@ -1385,4 +1389,3 @@ void __cdecl subtract_FloatFromFloat(Operand *leftSide, Operand *rightSide, Oper
     result->dataType = VAL_FLOAT;
     result->internals.floatVal = leftSide->internals.floatVal - rightSide->internals.floatVal;
 }
-

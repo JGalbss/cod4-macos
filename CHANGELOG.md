@@ -5,7 +5,21 @@ The project uses semantic versioning while the port is under active development.
 
 ## Unreleased
 
-No changes are currently queued beyond the 0.2.0 release candidate.
+### Changed
+
+- Existing profiles now receive the jgalbs default Favorite without
+  duplicating its address or disturbing other saved servers. Profiles seeded
+  by earlier builds migrate the old label to jgalbs in place.
+- Native OAT fastfile loading reports real decode and asset-registration
+  progress and repaints the map loading screen while synchronous work runs.
+- Native app icons use a transparent macOS-style rounded tile instead of a
+  square black image in the Dock.
+
+### Fixed
+
+- Hardened active arm64 code against dozens of Win32-size allocations, copies,
+  pointer strides, pointer comparisons, and delayed-render-command truncations
+  across scripts, UI, assets, snapshots, FX, sound, physics, and rendering.
 
 ## 0.2.0 release candidate - 2026-09-04
 

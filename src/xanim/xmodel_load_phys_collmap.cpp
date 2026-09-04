@@ -960,8 +960,8 @@ char __cdecl Xmodel_ParsePhysicsBrush(
     if (!totalEdges)
         return 0;
 
-    geom->brush = (BrushWrapper*)Alloc(80);
-    memset(geom->brush, 0, sizeof(BrushWrapper));
+    geom->brush = (BrushWrapper*)Alloc(sizeof(*geom->brush));
+    memset(geom->brush, 0, sizeof(*geom->brush));
 
     geom->brush->mins[0] = mins[0];
     geom->brush->mins[1] = mins[1];
@@ -997,8 +997,8 @@ char __cdecl Xmodel_ParsePhysicsBrush(
     geom->brush->numsides = sideCount - 6;
     if (geom->brush->numsides)
     {
-        geom->brush->sides = (cbrushside_t*)Alloc(12 * geom->brush->numsides);
-        geom->brush->planes = (cplane_s*)Alloc(20 * geom->brush->numsides);
+        geom->brush->sides = (cbrushside_t*)Alloc(sizeof(*geom->brush->sides) * geom->brush->numsides);
+        geom->brush->planes = (cplane_s*)Alloc(sizeof(*geom->brush->planes) * geom->brush->numsides);
         sideIndex = 0;
         while (sideIndex < static_cast<unsigned int>(geom->brush->numsides))
         {
@@ -1139,11 +1139,11 @@ PhysGeomList *__cdecl Xmodel_ParsePhysicsCollMap(
             }
             if (!strcmp(token, "{"))
             {
-                geomList = (PhysGeomList*)Alloc(44);
-                memset(geomList, 0, sizeof(PhysGeomList));
+                geomList = (PhysGeomList*)Alloc(sizeof(*geomList));
+                memset(geomList, 0, sizeof(*geomList));
                 geomList->count = geomCount;
-                geomList->geoms = (PhysGeomInfo*)Alloc(68 * geomCount);
-                memset(geomList->geoms, 0, 68 * geomCount);
+                geomList->geoms = (PhysGeomInfo*)Alloc(sizeof(*geomList->geoms) * geomCount);
+                memset(geomList->geoms, 0, sizeof(*geomList->geoms) * geomCount);
                 geomIndex = 0;
                 while (geomIndex < geomCount)
                 {

@@ -144,8 +144,13 @@ void __cdecl R_AddDelayedStaticModelDrawSurf(
     unsigned __int8 *list,
     unsigned int count)
 {
+    const uintptr_t xsurfAddress = reinterpret_cast<uintptr_t>(xsurf);
+
     R_WritePrimDrawSurfInt(delayedCmdBuf, count);
-    R_WritePrimDrawSurfInt(delayedCmdBuf, (unsigned int)(uintptr_t)xsurf);
+    R_WritePrimDrawSurfInt(delayedCmdBuf, static_cast<unsigned int>(xsurfAddress));
+#if UINTPTR_MAX > UINT32_MAX
+    R_WritePrimDrawSurfInt(delayedCmdBuf, static_cast<unsigned int>(xsurfAddress >> 32));
+#endif
     R_WritePrimDrawSurfData(delayedCmdBuf, list, (count + 1) >> 1);
 }
 
@@ -396,7 +401,11 @@ void __cdecl R_SkinStaticModelsCameraForLod(
                         &surfData->drawSurf[region],
                         &surfData->delayedCmdBuf)))
             {
-                if (!R_AllocDrawSurf(&surfData->delayedCmdBuf, drawSurf, &surfData->drawSurf[region], ((count + 1) >> 1) + 2))
+                if (!R_AllocDrawSurf(
+                        &surfData->delayedCmdBuf,
+                        drawSurf,
+                        &surfData->drawSurf[region],
+                        ((count + 1) >> 1) + 1 + sizeof(uintptr_t) / sizeof(unsigned int)))
                     return;
                 R_AddDelayedStaticModelDrawSurf(&surfData->delayedCmdBuf, &surfaces[surfaceIndex], list, count);
             }
@@ -801,7 +810,11 @@ void __cdecl R_SkinStaticModelsShadowForLod(
                         &surfData->drawSurfList,
                         &surfData->delayedCmdBuf)))
             {
-                if (!R_AllocDrawSurf(&surfData->delayedCmdBuf, drawSurf, &surfData->drawSurfList, ((count + 1) >> 1) + 2))
+                if (!R_AllocDrawSurf(
+                        &surfData->delayedCmdBuf,
+                        drawSurf,
+                        &surfData->drawSurfList,
+                        ((count + 1) >> 1) + 1 + sizeof(uintptr_t) / sizeof(unsigned int)))
                     return;
                 R_AddDelayedStaticModelDrawSurf(&surfData->delayedCmdBuf, &surfaces[0][surfaceIndex], list, count);
             }

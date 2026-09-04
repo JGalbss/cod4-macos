@@ -2858,7 +2858,7 @@ char __cdecl BulletTrace(
             "lastSurfaceType doesn't index SURF_TYPECOUNT\n\t%i not in [0, %i)",
             lastSurfaceType,
             29);
-    Com_Memset((uint32_t *)br, 0, 68);
+    Com_Memset(br, 0, sizeof(*br));
     CG_LocationalTrace(&br->trace, (float*)bp->start, (float*)bp->end, bp->ignoreEntIndex, 0x2806831);
     if (br->trace.hitType == TRACE_HITTYPE_NONE)
         return 0;

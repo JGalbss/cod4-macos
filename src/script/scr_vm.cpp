@@ -125,7 +125,7 @@ Scr_StringNode_s* __cdecl Scr_GetStringList(const char* filename, char** pBuf)
         LABEL_10:
             if (*end == 10)
                 ++end;
-            v3 = (Scr_StringNode_s*)Hunk_AllocDebugMem(8);
+            v3 = (Scr_StringNode_s*)Hunk_AllocDebugMem(sizeof(*v3));
             *pTail = v3;
             v3->text = text;
             v3->next = 0;
@@ -188,8 +188,8 @@ int __cdecl Scr_GetFunctionHandle(const char* filename, const char* name)
             "pos.type == VAR_CODE::pos || pos.type == VAR_DEVELOPER_CODE::pos");
     if (!Scr_IsInOpcodeMemory(v3.u.codePosValue))
         return 0;
-    result = v3.u.intValue - (unsigned int)(uintptr_t)scrVarPub.programBuffer;
-    if ((const char*)(uintptr_t)v3.u.intValue == scrVarPub.programBuffer)
+    result = static_cast<unsigned int>(v3.u.codePosValue - scrVarPub.programBuffer);
+    if (v3.u.codePosValue == scrVarPub.programBuffer)
         MyAssertHandler(".\\script\\scr_main.cpp", 106, 0, "%s", "result");
     return result;
 }
@@ -880,9 +880,10 @@ const char* __cdecl Scr_GetRunningThreadPos(unsigned int localId)
     for (function_count = scrVmPub.function_count; function_count; --function_count)
     {
         if (scrVmPub.function_frame_start[function_count].fs.localId == localId)
-            return &g_EndPos != (char*)(uintptr_t)scrVmPub.stack[3 * function_count - 96].u.intValue
-            ? (const char*)(uintptr_t)scrVmPub.stack[3 * function_count - 96].u.intValue
-            : 0;
+        {
+            const char *pos = scrVmPub.function_frame_start[function_count].fs.pos;
+            return &g_EndPos != pos ? pos : 0;
+        }
     }
     if (!alwaysfails)
         MyAssertHandler(".\\script\\scr_vm.cpp", 3191, 0, "unreachable");
@@ -5169,7 +5170,7 @@ unsigned int Scr_GetFunc(unsigned int index)
                     0,
                     "%s",
                     "Scr_IsInOpcodeMemory( value->u.codePosValue )");
-            return value->u.intValue - (unsigned int)(uintptr_t)scrVarPub.programBuffer;
+            return static_cast<unsigned int>(value->u.codePosValue - scrVarPub.programBuffer);
         }
         scrVarPub.error_index = index + 1;
         Scr_Error(va("type %s is not a function", var_typename[value->type]));

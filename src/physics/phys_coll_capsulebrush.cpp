@@ -468,10 +468,6 @@ bool __cdecl Phys_CapsuleSeparatingAxisTest(
     Vec3Sub(tri0, capsule->center, p0);
     Vec3Sub(tri1, capsule->center, p1);
     Vec3Sub(tri2, capsule->center, p2);
-    // KISAKHACK: hex-rays stored a pointer in a 32-bit slot. Bridge
-    // through uintptr_t; the value lives only in scratch v15[] before
-    // overwrite, so truncation is harmless here.
-    LODWORD(v15[51]) = (uint32)(uintptr_t)capsule->axis;
     Vec3Sub(tri0, cp0, diff);
     Vec3Cross(diff, capsule->axis, cross);
     Vec3Cross(cross, capsule->axis, testAxis);
@@ -998,4 +994,3 @@ void __cdecl Phys_CollideCapsuleWithTriangleList(
         Phys_CapsuleOptimizeLocalResults(results);
     }
 }
-

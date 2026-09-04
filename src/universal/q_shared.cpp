@@ -762,24 +762,13 @@ void __cdecl Info_RemoveKey_Big(char *s, const char *key)
 
 bool __cdecl Info_Validate(const char *s)
 {
-    int v1; // eax
-    int v3; // eax
-
-    v1 = (int)(uintptr_t)strchr(s, 0x22u);
-
-    if (v1)
+    if (strchr(s, '"'))
         return 0;
-
-    v3 = (int)(uintptr_t)strchr(s, 0x3Bu);
-
-    return v3 == 0;
+    return strchr(s, ';') == nullptr;
 }
 
 void __cdecl Info_SetValueForKey(char *s, const char *key, const char *value)
 {
-    int v3; // eax
-    int v4; // eax
-    int v5; // eax
     int j; // [esp+54h] [ebp-818h]
     char c; // [esp+5Bh] [ebp-811h]
     char cleanValue[1028]; // [esp+5Ch] [ebp-810h] BYREF
@@ -807,22 +796,19 @@ void __cdecl Info_SetValueForKey(char *s, const char *key, const char *value)
         if (j >= 1024)
             MyAssertHandler(".\\universal\\q_shared.cpp", 1275, 0, "%s", "j < MAX_INFO_STRING");
         cleanValue[j] = 0;
-        v3 = (int)(uintptr_t)strchr(key, 0x5Cu);
-        if (v3)
+        if (strchr(key, '\\'))
         {
             Com_Printf(16, "Can't use keys with a \\ key: %s value: %s", key, value);
         }
         else
         {
-            v4 = (int)(uintptr_t)strchr(key, 0x3Bu);
-            if (v4)
+            if (strchr(key, ';'))
             {
                 Com_Printf(16, "Can't use keys with a semicolon. key: %s value: %s", key, value);
             }
             else
             {
-                v5 = (int)(uintptr_t)strchr(key, 0x22u);
-                if (v5)
+                if (strchr(key, '"'))
                 {
                     Com_Printf(16, "Can't use keys with a \". key: %s value: %s", key, value);
                 }
@@ -856,9 +842,6 @@ void __cdecl Info_SetValueForKey(char *s, const char *key, const char *value)
 
 void __cdecl Info_SetValueForKey_Big(char *s, const char *key, const char *value)
 {
-    int v3; // eax
-    int v4; // eax
-    int v5; // eax
     int v6; // [esp+54h] [ebp-4018h]
     char v7; // [esp+5Bh] [ebp-4011h]
     char v8[8196]; // [esp+5Ch] [ebp-4010h] BYREF
@@ -887,22 +870,19 @@ void __cdecl Info_SetValueForKey_Big(char *s, const char *key, const char *value
         if (v6 >= 0x2000)
             MyAssertHandler(".\\universal\\q_shared.cpp", 1355, 0, "%s", "j < BIG_INFO_STRING");
         v8[v6] = 0;
-        v3 = (int)(uintptr_t)strchr(key, 0x5Cu);
-        if (v3)
+        if (strchr(key, '\\'))
         {
             Com_Printf(16, "Can't use keys with a \\ key: %s value: %s", key, value);
         }
         else
         {
-            v4 = (int)(uintptr_t)strchr(key, 0x3Bu);
-            if (v4)
+            if (strchr(key, ';'))
             {
                 Com_Printf(16, "Can't use keys with a semicolon. key: %s value: %s", key, value);
             }
             else
             {
-                v5 = (int)(uintptr_t)strchr(key, 0x22u);
-                if (v5)
+                if (strchr(key, '"'))
                 {
                     Com_Printf(16, "Can't use keys with a \". key: %s value: %s", key, value);
                 }
@@ -1140,4 +1120,3 @@ unsigned int __cdecl LongNoSwap(unsigned int color)
 {
     return color;
 }
-

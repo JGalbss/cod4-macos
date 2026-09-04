@@ -1065,7 +1065,7 @@ void __cdecl Player_ActivateHoldCmd(gentity_s *ent);
 void __cdecl Player_UseEntity(gentity_s *playerEnt, gentity_s *useEnt);
 void __cdecl Player_UpdateCursorHints(gentity_s *ent);
 int32_t __cdecl Player_GetUseList(gentity_s *ent, useList_t *useList, int32_t prevHintEntIndex);
-int32_t __cdecl compare_use(float *pe1, float *pe2);
+int32_t __cdecl compare_use(const void *pe1, const void *pe2);
 int32_t __cdecl Player_GetItemCursorHint(const gclient_s *client, const gentity_s *traceEnt);
 void __cdecl Player_SetTurretDropHint(gentity_s *ent);
 void __cdecl Player_SetVehicleDropHint(gentity_s *ent);

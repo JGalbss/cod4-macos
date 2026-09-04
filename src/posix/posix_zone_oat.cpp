@@ -29,6 +29,7 @@ extern void *DB_XAssetPool[];
 #include <cstdio>
 #include <cstdlib>
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -38,6 +39,32 @@ extern void *DB_XAssetPool[];
 
 namespace
 {
+    std::atomic<double> g_oatLoadFraction{0.0};
+    double g_lastLoadScreenUpdate = -1.0;
+
+    void SetOatLoadFraction(double fraction, bool redraw)
+    {
+        fraction = std::clamp(fraction, 0.0, 1.0);
+        g_oatLoadFraction.store(fraction, std::memory_order_relaxed);
+
+        // OAT is synchronous in this port, so the normal game loop cannot repaint
+        // while a fastfile is decoded.  One redraw per percentage point keeps the
+        // loading bar responsive without turning rendering into the bottleneck.
+        if (redraw && (g_lastLoadScreenUpdate < 0.0 || fraction - g_lastLoadScreenUpdate >= 0.01 || fraction == 1.0))
+        {
+            g_lastLoadScreenUpdate = fraction;
+            SCR_UpdateLoadScreen();
+        }
+    }
+
+    void OatLoadProgress(size_t current, size_t total, void *)
+    {
+        const double decoded = total ? static_cast<double>(current) / static_cast<double>(total) : 0.0;
+        // Decoding owns most of the work; registration and reference repair make
+        // up the final fifth and are measured separately below.
+        SetOatLoadFraction(decoded * 0.8, true);
+    }
+
     struct ZoneDeleter
     {
         void operator()(OatZone *zone) const
@@ -844,8 +871,16 @@ static void Posix_CheckOatLayout()
 extern "C" void Posix_ResolveOatReferences();
 extern "C" void Posix_ReleaseOatZone(const char *zoneName);
 
+extern "C" double Posix_GetOatLoadFraction()
+{
+    return g_oatLoadFraction.load(std::memory_order_relaxed);
+}
+
 extern "C" int Posix_LoadZoneWithOat(const char *filename, const char *zoneName)
 {
+    g_lastLoadScreenUpdate = -1.0;
+    SetOatLoadFraction(0.0, true);
+
     static bool layoutChecked = false;
     if (!layoutChecked)
     {
@@ -875,6 +910,7 @@ extern "C" int Posix_LoadZoneWithOat(const char *filename, const char *zoneName)
         if (loaded.registered)
         {
             Com_Printf(8, "[oat] zone '%s' already loaded, reusing\n", zoneName);
+            SetOatLoadFraction(1.0, true);
             return 1;
         }
 
@@ -888,19 +924,22 @@ extern "C" int Posix_LoadZoneWithOat(const char *filename, const char *zoneName)
     if (firstRegistration)
     {
         char err[512] = {0};
-        fresh.reset(OAT_LoadZone(filename, err, sizeof(err)));
+        fresh.reset(OAT_LoadZoneWithProgress(filename, err, sizeof(err), OatLoadProgress, nullptr));
         if (!fresh)
         {
             Com_PrintWarning(10, "WARNING: OAT could not load zone '%s': %s\n", zoneName, err);
+            SetOatLoadFraction(0.0, false);
             return 0;
         }
         zoneRef = fresh.get();
         BuildZoneScriptStringMap(zoneRef);
+        SetOatLoadFraction(0.8, true);
     }
     else
     {
         zoneRef = cachedZone->zone.get();
         Com_Printf(8, "[oat] zone '%s' storage cached; re-registering assets\n", zoneName);
+        SetOatLoadFraction(0.8, true);
     }
 
     const int count = OAT_AssetCount(zoneRef);
@@ -1077,6 +1116,8 @@ extern "C" int Posix_LoadZoneWithOat(const char *filename, const char *zoneName)
                     menu->items[item]->parent = menu;
             }
         }
+
+        SetOatLoadFraction(0.8 + (count ? 0.19 * static_cast<double>(i + 1) / static_cast<double>(count) : 0.19), true);
     }
 
     Com_Printf(0, "[oat] zone '%s': registered %d of %d assets (%d skipped)\n", zoneName, registered, count, skipped);
@@ -1102,5 +1143,6 @@ extern "C" int Posix_LoadZoneWithOat(const char *filename, const char *zoneName)
     // Resolve what this zone just made resolvable. Anything still missing waits for a
     // later zone; Posix_LoadDeferredZones runs a final pass once they are all in.
     Posix_ResolveOatReferences();
+    SetOatLoadFraction(1.0, true);
     return 1;
 }

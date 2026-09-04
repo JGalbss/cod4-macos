@@ -1061,18 +1061,21 @@ bool __cdecl Material_ParseRuleSetValue(
 MaterialStateMapRuleSet *__cdecl Material_AssembleRuleSet(int ruleCount, MaterialStateMapRule *rules)
 {
     int stateBitsIndex; // [esp+0h] [ebp-Ch]
-    unsigned __int8 *ruleSet; // [esp+4h] [ebp-8h]
+    MaterialStateMapRuleSet *ruleSet; // [esp+4h] [ebp-8h]
     int ruleIndex; // [esp+8h] [ebp-4h]
 
-    ruleSet = Material_Alloc(32 * ruleCount + 4);
-    *(_DWORD *)ruleSet = ruleCount;
-    Com_Memcpy((char *)ruleSet + 4, (char *)rules, 32 * ruleCount);
+    const unsigned int ruleSetSize = static_cast<unsigned int>(
+        offsetof(MaterialStateMapRuleSet, rules) + sizeof(MaterialStateMapRule) * ruleCount);
+    ruleSet = reinterpret_cast<MaterialStateMapRuleSet *>(Material_Alloc(ruleSetSize));
+    ruleSet->ruleCount = ruleCount;
+    Com_Memcpy(ruleSet->rules, rules, sizeof(MaterialStateMapRule) * ruleCount);
     for (ruleIndex = 0; ruleIndex < ruleCount; ++ruleIndex)
     {
         for (stateBitsIndex = 0; stateBitsIndex < 2; ++stateBitsIndex)
-            *(_DWORD *)&ruleSet[32 * ruleIndex + 28 + 4 * stateBitsIndex] = ~*(_DWORD *)&ruleSet[32 * ruleIndex + 28 + 4 * stateBitsIndex];
+            ruleSet->rules[ruleIndex].stateBitsClear[stateBitsIndex] =
+                ~ruleSet->rules[ruleIndex].stateBitsClear[stateBitsIndex];
     }
-    return (MaterialStateMapRuleSet *)ruleSet;
+    return ruleSet;
 }
 
 char __cdecl Material_ParseRuleSet(
@@ -1198,8 +1201,10 @@ MaterialStateMap *__cdecl Material_LoadStateMap(char *name)
         Com_SetSpaceDelimited(0);
         v2 = strlen(name);
         nameSize = v2 + 1;
-        stateMap = (MaterialStateMap*)Material_Alloc(v2 + 45);
-        stateMap->name = (const char*)&stateMap[1]; // (skip past statemap struct and use rest of buffer for name)
+        stateMap = reinterpret_cast<MaterialStateMap *>(
+            Material_Alloc(static_cast<unsigned int>(sizeof(MaterialStateMap) + nameSize)));
+        memset(stateMap, 0, sizeof(MaterialStateMap));
+        stateMap->name = reinterpret_cast<const char *>(&stateMap[1]);
         memcpy((void*)stateMap->name, name, nameSize);
         if (!Material_ParseStateMap(&text, stateMap))
             stateMap = 0;
@@ -2458,7 +2463,6 @@ char __cdecl Material_AttemptCombineShaderArguments(MaterialShaderArgument *arg0
 
 unsigned int __cdecl Material_CombineShaderArguments(unsigned int usedCount, MaterialShaderArgument *localArgs)
 {
-    MaterialArgumentDef v2; // ecx
     unsigned int srcIndex; // [esp+4h] [ebp-8h]
     unsigned int dstIndex; // [esp+8h] [ebp-4h]
 
@@ -2468,11 +2472,7 @@ unsigned int __cdecl Material_CombineShaderArguments(unsigned int usedCount, Mat
         if (!Material_AttemptCombineShaderArguments(&localArgs[dstIndex], &localArgs[srcIndex]))
         {
             ++dstIndex;
-            v2.nameHash = localArgs[srcIndex].u.nameHash;
-            //*&localArgs[dstIndex].type = *&localArgs[srcIndex].type;
-            localArgs[dstIndex].type = localArgs[srcIndex].type;
-            localArgs[dstIndex].dest = localArgs[srcIndex].dest;
-            localArgs[dstIndex].u = v2;
+            localArgs[dstIndex] = localArgs[srcIndex];
         }
     }
     return dstIndex + 1;
@@ -2495,9 +2495,13 @@ char __cdecl Material_SetShaderArguments(
 
     if (*argCount + usedCount <= argLimit)
     {
-        qsort(localArgs, usedCount, 8u, (int(*)(const void*, const void*))Material_CompareShaderArgumentsForCombining);
+        qsort(
+            localArgs,
+            usedCount,
+            sizeof(MaterialShaderArgument),
+            (int(*)(const void*, const void*))Material_CompareShaderArgumentsForCombining);
         usedCounta = Material_CombineShaderArguments(usedCount, localArgs);
-        memcpy(&args[*argCount], localArgs, 8 * usedCounta);
+        memcpy(&args[*argCount], localArgs, sizeof(MaterialShaderArgument) * usedCounta);
         *argCount += usedCounta;
         return 1;
     }
@@ -4149,7 +4153,11 @@ bool __cdecl Material_LoadPass(
         {
             if (!Material_LoadPassPixelShader(text, renderer, techFlags, &pixelParamSet, pass, 0x40u, &argCount, args))
                 goto LABEL_8;
-            qsort(args, argCount, 8u, (int(*)(const void*, const void*))Material_CompareShaderArgumentsForRuntime);
+            qsort(
+                args,
+                argCount,
+                sizeof(MaterialShaderArgument),
+                (int(*)(const void*, const void*))Material_CompareShaderArgumentsForRuntime);
             firstArg = 0;
             pass->perPrimArgCount = Material_CountArgsWithUpdateFrequency(MTL_UPDATE_PER_PRIM, args, argCount, &firstArg);
             pass->perObjArgCount = Material_CountArgsWithUpdateFrequency(MTL_UPDATE_PER_OBJECT, args, argCount, &firstArg);
@@ -4181,8 +4189,9 @@ bool __cdecl Material_LoadPass(
                 ++customArg;
             }
             argCount = pass->stableArgCount + pass->perObjArgCount + pass->perPrimArgCount;
-            pass->args = (MaterialShaderArgument*)Material_Alloc(8 * argCount);
-            memcpy(pass->args, args, 8 * argCount);
+            pass->args = reinterpret_cast<MaterialShaderArgument *>(Material_Alloc(
+                static_cast<unsigned int>(sizeof(MaterialShaderArgument) * argCount)));
+            memcpy(pass->args, args, sizeof(MaterialShaderArgument) * argCount);
             arg = pass->args;
             for (argIndex = 0; argIndex < pass->perPrimArgCount; ++argIndex)
             {
@@ -4236,8 +4245,8 @@ bool __cdecl Material_LoadPass(
 
 MaterialTechnique *__cdecl Material_LoadTechnique(char *name, GfxRenderer renderer)
 {
-    unsigned __int8 *technique; // [esp+24h] [ebp-1A0h]
-    int stateMapSize; // [esp+28h] [ebp-19Ch]
+    MaterialTechnique *technique; // [esp+24h] [ebp-1A0h]
+    size_t stateMapSize; // [esp+28h] [ebp-19Ch]
     MaterialStateMap *stateMap[4]; // [esp+2Ch] [ebp-198h] BYREF
     char filename[260]; // [esp+3Ch] [ebp-188h] BYREF
     MaterialVertexDeclaration *vertexDecl; // [esp+144h] [ebp-80h]
@@ -4296,29 +4305,34 @@ MaterialTechnique *__cdecl Material_LoadTechnique(char *name, GfxRenderer render
         }
         else if (passCount)
         {
-            stateMapSize = 4 * passCount;
+            const size_t passArraySize = sizeof(MaterialPass) * passCount;
+            stateMapSize = sizeof(MaterialStateMap *) * passCount;
             nameSize = strlen(name) + 1;
-            technique = Material_Alloc(nameSize + 24 * passCount + 8);
-            stateMapForPass = (MaterialStateMap**)&technique[20 * passCount + 8];
-            *(DWORD*)technique = (DWORD)&stateMapForPass[passCount];
-            memcpy(*(unsigned char**)technique, name, nameSize);
-            *((_WORD *)technique + 2) = techFlags;
-            if (!strcmp(*(const char**)technique, "zprepass"))
-                *((_WORD *)technique + 2) |= 4u;
+            const size_t techniqueSize = offsetof(MaterialTechnique, passArray)
+                + passArraySize + stateMapSize + nameSize;
+            technique = reinterpret_cast<MaterialTechnique *>(Material_Alloc(
+                static_cast<unsigned int>(techniqueSize)));
+            stateMapForPass = reinterpret_cast<MaterialStateMap **>(
+                &technique->passArray[passCount]);
+            technique->name = reinterpret_cast<const char *>(&stateMapForPass[passCount]);
+            memcpy(const_cast<char *>(technique->name), name, nameSize);
+            technique->flags = techFlags;
+            if (!strcmp(technique->name, "zprepass"))
+                technique->flags |= 4u;
             for (passIndex = 0; passIndex < passCount; ++passIndex)
             {
                 vertexDecl = passes[passIndex].vertexDecl;
                 iassert( vertexDecl );
                 if (vertexDecl->hasOptionalSource)
                 {
-                    *((_WORD *)technique + 2) |= 8u;
+                    technique->flags |= 8u;
                     break;
                 }
             }
-            *((_WORD *)technique + 3) = passCount;
-            memcpy(technique + 8, passes, 20 * passCount);
+            technique->passCount = passCount;
+            memcpy(technique->passArray, passes, passArraySize);
             memcpy(stateMapForPass, stateMap, stateMapSize);
-            return (MaterialTechnique*)technique;
+            return technique;
         }
         else
         {
@@ -4369,7 +4383,7 @@ MaterialTechniqueSet *__cdecl Material_LoadTechniqueSet(char *name, GfxRenderer 
     int techTypeCount; // [esp+14h] [ebp-1B8h]
     char filename[256]; // [esp+1Ch] [ebp-1B0h] BYREF
     int techTypeIndex; // [esp+120h] [ebp-ACh]
-    _DWORD techType[35]; // [esp+124h] [ebp-A8h]
+    int techType[35]; // [esp+124h] [ebp-A8h]
     bool usingTechnique; // [esp+1B3h] [ebp-19h]
     int nameSize; // [esp+1B4h] [ebp-18h]
     int fileSize; // [esp+1B8h] [ebp-14h]
@@ -4384,8 +4398,10 @@ MaterialTechniqueSet *__cdecl Material_LoadTechniqueSet(char *name, GfxRenderer 
     {
         v3 = strlen(name);
         nameSize = v3 + 1;
-        techniqueSet = (MaterialTechniqueSet*)Material_Alloc(v3 + 149);
-        techniqueSet->name = (const char*)&techniqueSet[1];
+        techniqueSet = reinterpret_cast<MaterialTechniqueSet *>(Material_Alloc(
+            static_cast<unsigned int>(sizeof(MaterialTechniqueSet) + nameSize)));
+        memset(techniqueSet, 0, sizeof(MaterialTechniqueSet));
+        techniqueSet->name = reinterpret_cast<const char *>(&techniqueSet[1]);
         techniqueSet->worldVertFormat = 0;
         memcpy((void*)techniqueSet->name, name, nameSize);
         techniqueSet->remappedTechniqueSet = techniqueSet;
@@ -4661,15 +4677,15 @@ void __cdecl Material_GetInfo(Material *handle, MaterialInfo *matInfo)
 
 Material *__cdecl Material_Duplicate(Material *mtlCopy, char *name)
 {
-    unsigned int v3; // [esp+8h] [ebp-30h]
+    unsigned int nameSize; // [esp+8h] [ebp-30h]
     const char *nameBackup; // [esp+18h] [ebp-20h]
     Material *mtlNewa; // [esp+1Ch] [ebp-1Ch]
-    unsigned __int8 *mtlNew; // [esp+1Ch] [ebp-1Ch]
-    int constantTableSize; // [esp+24h] [ebp-14h]
+    Material *mtlNew; // [esp+1Ch] [ebp-1Ch]
+    size_t constantTableSize; // [esp+24h] [ebp-14h]
     unsigned __int16 hashIndex[3]; // [esp+28h] [ebp-10h] BYREF
     bool exists; // [esp+2Fh] [ebp-9h] BYREF
-    unsigned int textureTableSize; // [esp+30h] [ebp-8h]
-    unsigned int stateBitsTableSize; // [esp+34h] [ebp-4h]
+    size_t textureTableSize; // [esp+30h] [ebp-8h]
+    size_t stateBitsTableSize; // [esp+34h] [ebp-4h]
 
     iassert( mtlCopy );
     iassert( name );
@@ -4685,28 +4701,39 @@ Material *__cdecl Material_Duplicate(Material *mtlCopy, char *name)
     }
     else
     {
-        v3 = strlen(name);
-        mtlNew = Material_Alloc(v3 + 81);
-        memcpy(mtlNew, mtlCopy, 0x50u);
-        *(_DWORD *)mtlNew = (uint32)mtlNew + 80;
-        memcpy(*(unsigned __int8 **)mtlNew, (unsigned __int8 *)name, v3 + 1);
-        stateBitsTableSize = 8 * mtlCopy->stateBitsCount;
-        *((_DWORD *)mtlNew + 19) = (uint32)Material_Alloc(stateBitsTableSize);
-        memcpy(*((unsigned __int8 **)mtlNew + 19), (unsigned __int8 *)mtlCopy->stateBitsTable, stateBitsTableSize);
+        nameSize = static_cast<unsigned int>(strlen(name) + 1);
+        mtlNew = reinterpret_cast<Material *>(Material_Alloc(
+            static_cast<unsigned int>(sizeof(Material) + nameSize)));
+        memcpy(mtlNew, mtlCopy, sizeof(Material));
+        mtlNew->info.name = reinterpret_cast<const char *>(&mtlNew[1]);
+        memcpy(const_cast<char *>(mtlNew->info.name), name, nameSize);
+        stateBitsTableSize = sizeof(GfxStateBits) * mtlCopy->stateBitsCount;
+        if (stateBitsTableSize)
+        {
+            mtlNew->stateBitsTable = reinterpret_cast<GfxStateBits *>(Material_Alloc(
+                static_cast<unsigned int>(stateBitsTableSize)));
+            memcpy(mtlNew->stateBitsTable, mtlCopy->stateBitsTable, stateBitsTableSize);
+        }
+        else
+        {
+            mtlNew->stateBitsTable = nullptr;
+        }
         if (mtlCopy->textureTable)
         {
-            textureTableSize = 12 * mtlCopy->textureCount;
-            *((_DWORD *)mtlNew + 17) = (uint32)Material_Alloc(textureTableSize);
-            memcpy(*((unsigned __int8 **)mtlNew + 17), (unsigned __int8 *)mtlCopy->textureTable, textureTableSize);
+            textureTableSize = sizeof(MaterialTextureDef) * mtlCopy->textureCount;
+            mtlNew->textureTable = reinterpret_cast<MaterialTextureDef *>(Material_Alloc(
+                static_cast<unsigned int>(textureTableSize)));
+            memcpy(mtlNew->textureTable, mtlCopy->textureTable, textureTableSize);
         }
         if (mtlCopy->constantTable)
         {
-            constantTableSize = 32 * mtlCopy->constantCount;
-            *((_DWORD *)mtlNew + 18) = (uint32)Material_Alloc(constantTableSize);
-            memcpy(*((unsigned __int8 **)mtlNew + 18), (unsigned __int8 *)mtlCopy->constantTable, constantTableSize);
+            constantTableSize = sizeof(MaterialConstantDef) * mtlCopy->constantCount;
+            mtlNew->constantTable = reinterpret_cast<MaterialConstantDef *>(Material_Alloc(
+                static_cast<unsigned int>(constantTableSize)));
+            memcpy(mtlNew->constantTable, mtlCopy->constantTable, constantTableSize);
         }
-        Material_Add((Material *)mtlNew, hashIndex[0]);
-        return (Material *)mtlNew;
+        Material_Add(mtlNew, hashIndex[0]);
+        return mtlNew;
     }
 }
 
@@ -4988,13 +5015,16 @@ unsigned __int8 __cdecl Material_AddStateBitsArrayToTable(
             break;
         if (partialMatchCount > passCount)
             partialMatchCount = passCount;
-        if (!memcmp(&(*stateBitsTable)[2 * scan], stateBitsForPass, 8 * partialMatchCount))
+        if (!memcmp(
+                &stateBitsTable[scan],
+                stateBitsForPass,
+                sizeof(*stateBitsTable) * partialMatchCount))
             break;
     }
     memcpy(
-        &(*stateBitsTable)[2 * *stateBitsCount],
-        &(*stateBitsForPass)[2 * partialMatchCount],
-        8 * (passCount - partialMatchCount));
+        &stateBitsTable[*stateBitsCount],
+        &stateBitsForPass[partialMatchCount],
+        sizeof(*stateBitsTable) * (passCount - partialMatchCount));
     *stateBitsCount += passCount - partialMatchCount;
     iassert(scan == static_cast<byte>(scan));
     return scan;
@@ -5068,9 +5098,18 @@ void __cdecl Material_AppendCharToConstName(char *name, char ch)
     }
 }
 
-int __cdecl CompareHashedMaterialTextures(_DWORD *e0, _DWORD *e1)
+int __cdecl CompareHashedMaterialTextures(const void *e0, const void *e1)
 {
-    return *e0 < *e1 ? -1 : 1;
+    const auto *texture0 = static_cast<const MaterialTextureDef *>(e0);
+    const auto *texture1 = static_cast<const MaterialTextureDef *>(e1);
+    return texture0->nameHash < texture1->nameHash ? -1 : 1;
+}
+
+int __cdecl CompareHashedMaterialConstants(const void *e0, const void *e1)
+{
+    const auto *constant0 = static_cast<const MaterialConstantDef *>(e0);
+    const auto *constant1 = static_cast<const MaterialConstantDef *>(e1);
+    return constant0->nameHash < constant1->nameHash ? -1 : 1;
 }
 
 Material *__cdecl Material_CreateLayered(
@@ -5079,7 +5118,6 @@ Material *__cdecl Material_CreateLayered(
     unsigned int layerCount,
     MaterialTechniqueSet *techSet)
 {
-    unsigned __int8 *v4; // edi
     const MaterialTextureDef *v5; // eax
     char v7; // [esp+Bh] [ebp-1ADh]
     MaterialConstantDef *v8; // [esp+Ch] [ebp-1ACh]
@@ -5089,9 +5127,9 @@ Material *__cdecl Material_CreateLayered(
     unsigned __int8 *memory; // [esp+28h] [ebp-190h]
     unsigned int oredSurfaceTypeBits; // [esp+2Ch] [ebp-18Ch]
     unsigned int texIndex; // [esp+30h] [ebp-188h]
-    unsigned int texTableSize; // [esp+34h] [ebp-184h]
+    size_t texTableSize; // [esp+34h] [ebp-184h]
     unsigned __int8 andedGameFlags; // [esp+43h] [ebp-175h]
-    unsigned int constTableSize; // [esp+44h] [ebp-174h]
+    size_t constTableSize; // [esp+44h] [ebp-174h]
     MaterialTextureDef *newTexEntry; // [esp+48h] [ebp-170h]
     unsigned __int8 oredGameFlags; // [esp+4Fh] [ebp-169h]
     unsigned int stateBitsTable[34][2]; // [esp+50h] [ebp-168h] BYREF
@@ -5127,32 +5165,32 @@ Material *__cdecl Material_CreateLayered(
     }
     stateBitsCount = Material_CreateLayeredStateBitsTable(layerMtl, layerCount, techSet, stateBitsEntry, stateBitsTable);
     v10 = strlen(name);
-    texTableSize = 12 * textureCount;
-    constTableSize = 32 * constantCount;
-    memory = Material_Alloc(v10 + 1 + texTableSize + constTableSize + 80);
-    memset(memory, 0, v10 + 1 + texTableSize + constTableSize + 80);
+    texTableSize = sizeof(MaterialTextureDef) * textureCount;
+    constTableSize = sizeof(MaterialConstantDef) * constantCount;
+    const size_t allocationSize = sizeof(Material) + texTableSize + constTableSize + v10 + 1;
+    memory = Material_Alloc(static_cast<unsigned int>(allocationSize));
+    memset(memory, 0, allocationSize);
     newMtl = (Material*)memory;
     if (texTableSize)
-        v9 = (MaterialTextureDef*)(memory + 80);
+        v9 = reinterpret_cast<MaterialTextureDef *>(memory + sizeof(Material));
     else
         v9 = 0;
     newMtl->textureTable = v9;
     if (constTableSize)
-        v8 = (MaterialConstantDef*)&memory[texTableSize + 80];
+        v8 = reinterpret_cast<MaterialConstantDef *>(memory + sizeof(Material) + texTableSize);
     else
         v8 = 0;
     newMtl->constantTable = v8;
     newMtl->techniqueSet = techSet;
-    newMtl->info.name = (const char*)&memory[texTableSize + 80 + constTableSize];
+    newMtl->info.name = reinterpret_cast<const char *>(
+        memory + sizeof(Material) + texTableSize + constTableSize);
     memcpy((void*)newMtl->info.name, name, v10 + 1);
-    newMtl->info.gameFlags = oredGameFlags & 0xFB | andedGameFlags & 4;
+    newMtl->info.gameFlags = (oredGameFlags & 0xFB) | (andedGameFlags & 4);
     newMtl->info.sortKey = (*layerMtl)->info.sortKey;
     newMtl->info.surfaceTypeBits = oredSurfaceTypeBits;
     newMtl->textureCount = textureCount;
     newMtl->constantCount = constantCount;
-    v4 = newMtl->stateBitsEntry;
-    qmemcpy(newMtl->stateBitsEntry, stateBitsEntry, 0x20u);
-    *((_WORD *)v4 + 16) = *(_WORD *)&stateBitsEntry[32];
+    memcpy(newMtl->stateBitsEntry, stateBitsEntry, sizeof(newMtl->stateBitsEntry));
     Material_SetStateBits(newMtl, stateBitsTable, stateBitsCount);
     newTexEntry = newMtl->textureTable;
     newConstEntry = newMtl->constantTable;
@@ -5232,8 +5270,16 @@ Material *__cdecl Material_CreateLayered(
             "newConstEntry - newMtl->constantTable == newMtl->constantCount\n\t%i, %i",
             newConstEntry - newMtl->constantTable,
             newMtl->constantCount);
-    qsort(newMtl->textureTable, newMtl->textureCount, 0xCu, (int(*)(const void*, const void*))CompareHashedMaterialTextures);
-    qsort(newMtl->constantTable, newMtl->constantCount, 0x20u, (int(*)(const void *, const void *))CompareHashedMaterialTextures);
+    qsort(
+        newMtl->textureTable,
+        newMtl->textureCount,
+        sizeof(MaterialTextureDef),
+        CompareHashedMaterialTextures);
+    qsort(
+        newMtl->constantTable,
+        newMtl->constantCount,
+        sizeof(MaterialConstantDef),
+        CompareHashedMaterialConstants);
     Material_SetMaterialDrawRegion(newMtl);
     if (Material_Validate(newMtl))
         return newMtl;
@@ -5489,14 +5535,24 @@ water_t *__cdecl Material_RegisterWaterImage(const MaterialWaterDef *water)
     return R_LoadWaterSetup(&setup);
 }
 
-int __cdecl CompareRawMaterialTextures(_DWORD *e0, _DWORD *e1)
+int __cdecl CompareRawMaterialTextures(const void *e0, const void *e1)
 {
-    unsigned int v2; // esi
-    const char *name_4; // [esp+8h] [ebp-4h]
+    const auto *texture0 = static_cast<const MaterialTextureDefRaw *>(e0);
+    const auto *texture1 = static_cast<const MaterialTextureDefRaw *>(e1);
+    const char *name1 = reinterpret_cast<const char *>(mtlLoadGlob.sortMtlRaw) + texture1->nameOffset;
+    const unsigned int nameHash0 = R_HashString(
+        reinterpret_cast<const char *>(mtlLoadGlob.sortMtlRaw) + texture0->nameOffset);
+    return nameHash0 < R_HashString(name1) ? -1 : 1;
+}
 
-    name_4 = (const char*)mtlLoadGlob.sortMtlRaw + *e1;
-    v2 = R_HashString((const char*)mtlLoadGlob.sortMtlRaw + *e0);
-    return v2 < R_HashString(name_4) ? -1 : 1;
+int __cdecl CompareRawMaterialConstants(const void *e0, const void *e1)
+{
+    const auto *constant0 = static_cast<const MaterialConstantDefRaw *>(e0);
+    const auto *constant1 = static_cast<const MaterialConstantDefRaw *>(e1);
+    const char *name1 = reinterpret_cast<const char *>(mtlLoadGlob.sortMtlRaw) + constant1->nameOffset;
+    const unsigned int nameHash0 = R_HashString(
+        reinterpret_cast<const char *>(mtlLoadGlob.sortMtlRaw) + constant0->nameOffset);
+    return nameHash0 < R_HashString(name1) ? -1 : 1;
 }
 
 BOOL __cdecl Material_RegisterImage(
@@ -5524,7 +5580,8 @@ BOOL __cdecl Material_FinishLoadingTexdef(
         texdef->samplerState |= 0x10u;
     }
     if (texdef->semantic == 11)
-        return Material_RegisterWaterImage((const MaterialWaterDef*)(material + texdef->u.imageNameOffset)) != 0;
+        return Material_RegisterWaterImage(reinterpret_cast<const MaterialWaterDef *>(
+            reinterpret_cast<const char *>(material) + texdef->u.waterDefOffset)) != 0;
     else
         return Material_RegisterImage(material, texdef->u.imageNameOffset, texdef->semantic, imageTrack);
 }
@@ -5558,7 +5615,11 @@ bool __cdecl Material_FinishLoadingInstance(
             return 0;
     }
     mtlLoadGlob.sortMtlRaw = mtlRaw;
-    qsort(textureTable, mtlRaw->textureCount, 0xCu, (int(*)(const void*, const void*))CompareRawMaterialTextures);
+    qsort(
+        textureTable,
+        mtlRaw->textureCount,
+        sizeof(MaterialTextureDefRaw),
+        CompareRawMaterialTextures);
     mtlLoadGlob.sortMtlRaw = 0;
     constantTable = (MaterialConstantDefRaw*)((char*)mtlRaw + mtlRaw->constantTableOffset);
     for (constantIndex = 0; constantIndex < mtlRaw->constantCount; ++constantIndex)
@@ -5567,7 +5628,11 @@ bool __cdecl Material_FinishLoadingInstance(
             return 0;
     }
     mtlLoadGlob.sortMtlRaw = mtlRaw;
-    qsort(constantTable, mtlRaw->constantCount, 0x14u, (int(*)(const void *, const void *))CompareRawMaterialTextures);
+    qsort(
+        constantTable,
+        mtlRaw->constantCount,
+        sizeof(MaterialConstantDefRaw),
+        CompareRawMaterialConstants);
     mtlLoadGlob.sortMtlRaw = 0;
     Com_sprintf(techniqueSetName, 0x100u, "%s%s", techniqueSetVertDeclPrefix, (char*) mtlRaw + mtlRaw->techSetNameOffset);
     *techniqueSet = Material_RegisterTechniqueSet(techniqueSetName);
@@ -5796,15 +5861,17 @@ void __cdecl Material_UpdateStateFlags(Material *mtl)
 
 void __cdecl Material_SetStateBits(Material *material, unsigned int (*stateBitsTable)[2], unsigned int stateBitsCount)
 {
-    unsigned __int8 *v3; // [esp+0h] [ebp-4h]
-
     material->stateBitsCount = stateBitsCount;
     if (stateBitsCount)
-        v3 = Material_Alloc(8 * stateBitsCount);
+    {
+        material->stateBitsTable = reinterpret_cast<GfxStateBits *>(Material_Alloc(
+            static_cast<unsigned int>(sizeof(GfxStateBits) * stateBitsCount)));
+        memcpy(material->stateBitsTable, stateBitsTable, sizeof(GfxStateBits) * stateBitsCount);
+    }
     else
-        v3 = 0;
-    material->stateBitsTable = (GfxStateBits*)v3;
-    memcpy(material->stateBitsTable, stateBitsTable, 8 * stateBitsCount);
+    {
+        material->stateBitsTable = nullptr;
+    }
     Material_UpdateStateFlags(material);
 }
 
@@ -5919,6 +5986,7 @@ Material *__cdecl Material_LoadRaw(const MaterialRaw *mtlRaw, unsigned int mater
     prefixLen = g_materialTypeInfo[materialType].prefixLen;
     materialMem = Material_Alloc(prefixLen + strlen(name) + 1 + sizeof(Material));
     material = (Material*)materialMem;
+    memset(material, 0, sizeof(Material));
     strDest = (char*)materialMem + sizeof(Material);
     memcpy(strDest, g_materialTypeInfo[materialType].prefix, prefixLen);
     memcpy(&strDest[prefixLen], name, strlen(name) + 1);
@@ -5953,7 +6021,8 @@ Material *__cdecl Material_LoadRaw(const MaterialRaw *mtlRaw, unsigned int mater
     material->techniqueSet = techniqueSet;
     if (mtlRaw->textureCount)
     {
-        material->textureTable = (MaterialTextureDef*)Material_Alloc(12 * mtlRaw->textureCount);
+        material->textureTable = reinterpret_cast<MaterialTextureDef *>(Material_Alloc(
+            static_cast<unsigned int>(sizeof(MaterialTextureDef) * mtlRaw->textureCount)));
         textureTableRaw = (const MaterialTextureDefRaw*)((char*)mtlRaw + mtlRaw->textureTableOffset);
         for (texIndex = 0; texIndex < mtlRaw->textureCount; ++texIndex)
         {
@@ -5971,7 +6040,10 @@ Material *__cdecl Material_LoadRaw(const MaterialRaw *mtlRaw, unsigned int mater
                     "material->textureTable[texIndex].samplerState & SAMPLER_FILTER_MASK");
             material->textureTable[texIndex].semantic = textureTableRaw[texIndex].semantic;
             if (material->textureTable[texIndex].semantic == 11)
-                material->textureTable[texIndex].u.image = (GfxImage*)Material_RegisterWaterImage((const MaterialWaterDef*)(mtlRaw + textureTableRaw[texIndex].u.imageNameOffset));
+                material->textureTable[texIndex].u.water = Material_RegisterWaterImage(
+                    reinterpret_cast<const MaterialWaterDef *>(
+                        reinterpret_cast<const char *>(mtlRaw)
+                        + textureTableRaw[texIndex].u.waterDefOffset));
             else
                 material->textureTable[texIndex].u.image = Image_Register(
                     (const char*)mtlRaw + textureTableRaw[texIndex].u.imageNameOffset,
@@ -5981,7 +6053,8 @@ Material *__cdecl Material_LoadRaw(const MaterialRaw *mtlRaw, unsigned int mater
     }
     if (mtlRaw->constantCount)
     {
-        material->constantTable = (MaterialConstantDef*)Material_Alloc(32 * mtlRaw->constantCount);
+        material->constantTable = reinterpret_cast<MaterialConstantDef *>(Material_Alloc(
+            static_cast<unsigned int>(sizeof(MaterialConstantDef) * mtlRaw->constantCount)));
         constantTableRaw = (const MaterialConstantDefRaw*)((char*)mtlRaw + mtlRaw->constantTableOffset);
         for (constIndex = 0; constIndex < mtlRaw->constantCount; ++constIndex)
         {

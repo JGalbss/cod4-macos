@@ -594,7 +594,7 @@ DebugGlobals *R_ToggleSmpFrame()
     Com_Memset(frontEndDataOut->drawSurfs, 176, 8 * frontEndDataOut->drawSurfCount);
     Com_Memset(frontEndDataOut->surfsBuffer, 176, frontEndDataOut->surfPos);
     Com_Memset(frontEndDataOut->clouds, 176, frontEndDataOut->cloudCount << 6);
-    Com_Memset(&frontEndDataOut->codeMeshes[0].triCount, 176, 0x8000);
+    Com_Memset(frontEndDataOut->codeMeshes, 176, sizeof(frontEndDataOut->codeMeshes));
     Com_Memset(frontEndDataOut->primDrawSurfsBuf, 176, 4 * frontEndDataOut->primDrawSurfPos);
     Com_Memset(&frontEndDataOut->fogSettings, 176, 20);
     frontEndDataOut->drawSurfCount = 0;

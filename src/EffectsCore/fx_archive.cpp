@@ -4,42 +4,108 @@
 
 #include <physics/phys_local.h>
 
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+
+namespace
+{
+constexpr int kFxSystemArchiveSize = static_cast<int>(sizeof(FxSystem));
+constexpr int kFxSystemBuffersArchiveSize = static_cast<int>(sizeof(FxSystemBuffers));
+
+static_assert(sizeof(FxSystem) <= static_cast<size_t>(std::numeric_limits<int>::max()));
+static_assert(sizeof(FxSystemBuffers) <= static_cast<size_t>(std::numeric_limits<int>::max()));
+static_assert(offsetof(FxSystem, needsGarbageCollection) < sizeof(FxSystem));
+static_assert(offsetof(FxSystem, isArchiving) < sizeof(FxSystem));
+
+struct FxArchivePointerBases
+{
+    uintptr_t system;
+    uintptr_t systemBuffers;
+};
+
+uint32_t FX_ArchivePointerKey(uintptr_t address)
+{
+#if UINTPTR_MAX > UINT32_MAX
+    address ^= address >> 32;
+#endif
+    return static_cast<uint32_t>(address);
+}
+
+uintptr_t FX_RelocateArchivedAddress(uintptr_t address, uintptr_t archivedBase, uintptr_t currentBase)
+{
+    if (!address || archivedBase == currentBase)
+        return address;
+
+    if (currentBase > archivedBase)
+    {
+        const uintptr_t relocationDistance = currentBase - archivedBase;
+        if (address > std::numeric_limits<uintptr_t>::max() - relocationDistance)
+        {
+            Com_Error(ERR_DROP, "Invalid FX archive pointer relocation");
+            return 0;
+        }
+        return address + relocationDistance;
+    }
+
+    const uintptr_t relocationDistance = archivedBase - currentBase;
+    if (address < relocationDistance)
+    {
+        Com_Error(ERR_DROP, "Invalid FX archive pointer relocation");
+        return 0;
+    }
+    return address - relocationDistance;
+}
+
+void FX_RelocateArchivedSystem(
+    FxSystem *system,
+    uintptr_t archivedSystemBuffers,
+    const FxSystemBuffers *currentSystemBuffers)
+{
+    const uintptr_t currentSystemBuffersAddress = reinterpret_cast<uintptr_t>(currentSystemBuffers);
+
+    system->visStateBufferRead = reinterpret_cast<const FxVisState *>(FX_RelocateArchivedAddress(
+        reinterpret_cast<uintptr_t>(system->visStateBufferRead), archivedSystemBuffers, currentSystemBuffersAddress));
+    system->visStateBufferWrite = reinterpret_cast<FxVisState *>(FX_RelocateArchivedAddress(
+        reinterpret_cast<uintptr_t>(system->visStateBufferWrite), archivedSystemBuffers, currentSystemBuffersAddress));
+}
+}
+
 void __cdecl FX_Restore(int32_t clientIndex, MemoryFile *memFile)
 {
-    int32_t v2; // [esp+0h] [ebp-201Ch] BYREF
     FxEffectDefTable table; // [esp+4h] [ebp-2018h] BYREF
-    [[maybe_unused]] int32_t v4; // [esp+200Ch] [ebp-10h]
-    [[maybe_unused]] int32_t relocationDistance; // [esp+2010h] [ebp-Ch]
-    void *p; // [esp+2014h] [ebp-8h]
+    FxSystem *system;
     FxSystemBuffers *systemBuffers; // [esp+2018h] [ebp-4h]
+    FxArchivePointerBases archivedBases;
 
-    p = FX_GetSystem(clientIndex);
-    if (!p)
+    system = FX_GetSystem(clientIndex);
+    if (!system)
         MyAssertHandler(".\\EffectsCore\\fx_archive.cpp", 220, 0, "%s", "system");
     systemBuffers = FX_GetSystemBuffers(clientIndex);
     if (!systemBuffers)
         MyAssertHandler(".\\EffectsCore\\fx_archive.cpp", 223, 0, "%s", "systemBuffers");
     FX_RestoreEffectDefTable(memFile, &table);
-    MemFile_ReadData(memFile, 2656, (uint8_t *)p);
-    if (!*((_BYTE *)p + 2526) || *((uint32_t *)p + 627))
+    MemFile_ReadData(memFile, kFxSystemArchiveSize, reinterpret_cast<uint8_t *>(system));
+    if (!*reinterpret_cast<const bool *>(reinterpret_cast<const uint8_t *>(system) + offsetof(FxSystem, isArchiving))
+        || *reinterpret_cast<const bool *>(reinterpret_cast<const uint8_t *>(system) + offsetof(FxSystem, needsGarbageCollection)))
         Com_Error(ERR_DROP, "Invalid save file");
-    FX_LinkSystemBuffers((FxSystem *)p, systemBuffers);
-    MemFile_ReadData(memFile, 291968, (uint8_t *)systemBuffers);
-    FX_FixupEffectDefHandles((FxSystem *)p, &table);
-    MemFile_ReadData(memFile, 4, (uint8_t *)&v2);
-    v4 = v2;
-    relocationDistance = (int)(uintptr_t)p - v2;
-    FX_RelocateSystem((FxSystem *)p, (int)(uintptr_t)p - v2);
-    FX_RestorePhysicsData((FxSystem *)p, memFile);
-    *((_BYTE *)p + 2526) = 0;
+    FX_LinkSystemBuffers(system, systemBuffers);
+    MemFile_ReadData(memFile, kFxSystemBuffersArchiveSize, reinterpret_cast<uint8_t *>(systemBuffers));
+    FX_FixupEffectDefHandles(system, &table);
+    MemFile_ReadData(memFile, static_cast<int>(sizeof(archivedBases)), reinterpret_cast<uint8_t *>(&archivedBases));
+    if (!archivedBases.system || !archivedBases.systemBuffers)
+        Com_Error(ERR_DROP, "Invalid FX archive pointer bases");
+    FX_RelocateArchivedSystem(system, archivedBases.systemBuffers, systemBuffers);
+    FX_RestorePhysicsData(system, memFile);
+    *reinterpret_cast<bool *>(reinterpret_cast<uint8_t *>(system) + offsetof(FxSystem, isArchiving)) = false;
 }
 
 void __cdecl FX_RestoreEffectDefTable(MemoryFile *memFile, FxEffectDefTable *table)
 {
-    uint32_t p; // [esp+0h] [ebp-10h] BYREF
+    uintptr_t archivedEffectDef;
     const FxEffectDef *effectDef; // [esp+4h] [ebp-Ch]
     uint32_t key; // [esp+8h] [ebp-8h]
-    const char *effectDefName; // [esp+Ch] [ebp-4h]
+    const char *effectDefName;
 
     table->count = 0;
     while (1)
@@ -47,9 +113,10 @@ void __cdecl FX_RestoreEffectDefTable(MemoryFile *memFile, FxEffectDefTable *tab
         effectDefName = MemFile_ReadCString(memFile);
         if (!*effectDefName)
             break;
-        MemFile_ReadData(memFile, 4, (uint8_t *)&p);
-        key = p;
-        effectDef = FX_Register((char *)effectDefName);
+        MemFile_ReadData(
+            memFile, static_cast<int>(sizeof(archivedEffectDef)), reinterpret_cast<uint8_t *>(&archivedEffectDef));
+        key = FX_ArchivePointerKey(archivedEffectDef);
+        effectDef = FX_Register(effectDefName);
         FX_AddEffectDefTableEntry(table, key, effectDef);
     }
 }
@@ -68,6 +135,14 @@ void __cdecl FX_AddEffectDefTableEntry(FxEffectDefTable *table, uint32_t key, co
             1024);
     if (!effectDef)
         MyAssertHandler(".\\EffectsCore\\fx_archive.cpp", 49, 0, "%s", "effectDef");
+    for (int32_t index = 0; index < table->count; ++index)
+    {
+        if (table->entries[index].key != key)
+            continue;
+        if (table->entries[index].effectDef != effectDef)
+            Com_Error(ERR_DROP, "FX archive effect pointer key collision");
+        return;
+    }
     table->entries[table->count].key = key;
     table->entries[table->count++].effectDef = effectDef;
 }
@@ -85,7 +160,7 @@ void __cdecl FX_FixupEffectDefHandles(FxSystem *system, FxEffectDefTable *table)
     for (activeIndex = system->firstActiveEffect; activeIndex != system->firstNewEffect; ++activeIndex)
     {
         effect = FX_EffectFromHandle(system, system->allEffectHandles[activeIndex & 0x3FF]);
-        effectDef = FX_FindEffectDefInTable(table, (uint32_t)(uintptr_t)effect->def);
+        effectDef = FX_FindEffectDefInTable(table, FX_ArchivePointerKey(reinterpret_cast<uintptr_t>(effect->def)));
         if (!effectDef)
             MyAssertHandler(".\\EffectsCore\\fx_archive.cpp", 139, 0, "%s", "effectDef");
         effect->def = effectDef;
@@ -159,7 +234,7 @@ void __cdecl FX_RestorePhysicsData(FxSystem *system, MemoryFile *memFile)
                 elem->item.physObjId = Phys_ObjToId(Phys_ObjLoad(PHYS_WORLD_FX, memFile));
                 visuals = FX_GetElemVisuals(
                     elemDef,
-                    (296 * elem->item.sequence + elem->item.msecBegin + (uint32_t)(uintptr_t)effect->randomSeed) % 0x1DF).model;
+                    (296 * elem->item.sequence + elem->item.msecBegin + effect->randomSeed) % 0x1DF).model;
                 Phys_ObjSetCollisionFromXModel(visuals, PHYS_WORLD_FX, Phys_ObjFromId(elem->item.physObjId));
             }
         }
@@ -187,9 +262,9 @@ void __cdecl FX_Save(int32_t clientIndex, MemoryFile *memFile)
 {
     [[maybe_unused]] uint32_t UsedSize; // eax
     [[maybe_unused]] uint32_t v3; // eax
-    FxSystem *p; // [esp+0h] [ebp-Ch] BYREF
     FxSystem *system; // [esp+4h] [ebp-8h]
     FxSystemBuffers *systemBuffers; // [esp+8h] [ebp-4h]
+    FxArchivePointerBases archivedBases;
 
     system = FX_GetSystem(clientIndex);
     if (!system)
@@ -201,14 +276,15 @@ void __cdecl FX_Save(int32_t clientIndex, MemoryFile *memFile)
         MyAssertHandler(".\\EffectsCore\\fx_archive.cpp", 270, 0, "%s", "!system->isArchiving");
     system->isArchiving = 1;
     FX_SaveEffectDefTable(system, memFile);
-    MemFile_WriteData(memFile, 2656, system);
+    MemFile_WriteData(memFile, kFxSystemArchiveSize, system);
     UsedSize = MemFile_GetUsedSize(memFile);
     // ProfMem_Begin("systemBuffers", UsedSize);
-    MemFile_WriteData(memFile, 291968, systemBuffers);
+    MemFile_WriteData(memFile, kFxSystemBuffersArchiveSize, systemBuffers);
     v3 = MemFile_GetUsedSize(memFile);
     // ProfMem_End(v3);
-    p = system;
-    MemFile_WriteData(memFile, 4, &p);
+    archivedBases.system = reinterpret_cast<uintptr_t>(system);
+    archivedBases.systemBuffers = reinterpret_cast<uintptr_t>(systemBuffers);
+    MemFile_WriteData(memFile, static_cast<int>(sizeof(archivedBases)), &archivedBases);
     FX_SavePhysicsData(system, memFile);
     system->isArchiving = 0;
 }
@@ -224,11 +300,10 @@ void __cdecl FX_SaveEffectDefTable(FxSystem *system, MemoryFile *memFile)
 
 void __cdecl FX_SaveEffectDefTableEntry_FileLoadObj(const FxEffectDef* effectDef, MemoryFile* data)
 {
-    const FxEffectDef* p; // [esp+0h] [ebp-4h] BYREF
+    const uintptr_t archivedEffectDef = reinterpret_cast<uintptr_t>(effectDef);
 
     MemFile_WriteCString(data, (char*)effectDef->name);
-    p = effectDef;
-    MemFile_WriteData(data, 4, &p);
+    MemFile_WriteData(data, static_cast<int>(sizeof(archivedEffectDef)), &archivedEffectDef);
 }
 
 void __cdecl FX_SaveEffectDefTable_LoadObj(MemoryFile* memFile)

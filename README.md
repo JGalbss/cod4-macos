@@ -17,6 +17,9 @@ macOS, featuring a native Metal renderer.
 The client supports profiles, multiplayer menus and maps, keyboard and mouse
 input, audio, hosting, and joining matches. Core gameplay includes combat,
 killcams, respawning, progression, Create-a-Class, and the stock bomb modes.
+Fresh and upgraded profiles receive a
+Favorite named **jgalbs**; other saved Favorites are preserved and its address
+is not duplicated.
 
 Development is ongoing. See [Validation](docs/VALIDATION.md) for tested features
 and known limitations.
