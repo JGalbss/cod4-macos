@@ -139,8 +139,17 @@ rsync --archive \
     --exclude='*.mobileprovision' \
     --exclude='*.xcuserstate' \
     --exclude='*.log' \
+    --exclude='*.bak' \
     --exclude='*~' \
     "${repo_dir}/" "${destination}/"
+
+# Git checks Windows command files out as CRLF via .gitattributes, while an
+# older working tree may still contain LF bytes from before that policy was
+# added. Canonicalize the staging copy so its manifest is reproducible from
+# either checkout state without modifying the source working tree.
+while IFS= read -r -d $'\0' windows_script; do
+    /usr/bin/perl -0777 -pi -e 's/\r\n?/\n/g; s/\n/\r\n/g' "${windows_script}"
+done < <(find "${destination}" -type f \( -name '*.bat' -o -name '*.cmd' \) -print0)
 
 typeset -a audit_failures
 audit_failures=()
@@ -188,7 +197,7 @@ while IFS= read -r -d $'\0' exported_path; do
     esac
 
     case "${base_name}" in
-        (.DS_Store|.env|.env.*|*.pem|*.p12|*.pfx|*.key|*.keystore|*.mobileprovision|*.xcuserstate|*.log|*~)
+        (.DS_Store|.env|.env.*|*.pem|*.p12|*.pfx|*.key|*.keystore|*.mobileprovision|*.xcuserstate|*.log|*.bak|*~)
             record_failure "sensitive or local-only filename escaped filters: ${relative_path}" ;;
         (*.app|*.dmg|*.pkg|*.xcarchive|*.zip|*.7z|*.rar|*.tar|*.tar.gz|*.tar.xz)
             record_failure "archive or bundle escaped filters: ${relative_path}" ;;
