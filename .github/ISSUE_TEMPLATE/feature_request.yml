@@ -1,42 +1,61 @@
-name: Feature / port task
-description: Propose a task or improvement for the port
-labels: ["enhancement"]
+name: Native client improvement
+description: Propose a focused improvement for the Apple Silicon port
+labels: [enhancement]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Proposals must remain source-only and must not require redistributing
+        Call of Duty 4 data or an unlicensed proprietary dependency.
+
   - type: dropdown
     id: subsystem
     attributes:
       label: Subsystem
       options:
-        - gfx (renderer)
-        - sound
-        - net
-        - posix (Win32→POSIX stubs)
-        - switch (libnx-specific)
-        - cmake / build
-        - deps (third-party)
-        - docs
-        - ci
-        - other
+        - Metal renderer and shaders
+        - Input and windowing
+        - Audio and voice
+        - Networking and multiplayer
+        - Gameplay and UI
+        - Asset and data compatibility
+        - Performance and stability
+        - Packaging and updates
+        - Build and dependencies
+        - Tests, documentation, or CI
     validations:
       required: true
-  - type: dropdown
-    id: phase
+
+  - type: textarea
+    id: problem
     attributes:
-      label: Port phase
+      label: Problem or opportunity
+      description: Describe the user-visible limitation and why it matters.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: Include likely files or interfaces if known.
+    validations:
+      required: true
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Acceptance and validation
+      description: Define observable success, performance measurements, or regression tests.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Project constraints
       options:
-        - "Phase 1 — macOS/Linux baseline"
-        - "Phase 2 — Switch cross-compile"
-        - "Phase 3 — Switch optimization"
-        - "Phase-independent"
-    validations:
-      required: true
-  - type: textarea
-    id: description
-    attributes:
-      label: Description
-    validations:
-      required: true
-  - type: textarea
-    id: approach
-    attributes:
-      label: Proposed approach (optional)
+        - label: The proposal does not require retail data in the repository or release bundle.
+          required: true
+        - label: The proposal does not depend on publishing an unsigned binary.
+          required: true

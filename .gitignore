@@ -420,6 +420,8 @@ FodyWeavers.xsd
 # Build Number
 **/buildnumber.h
 **/buildnumber.txt
+# The native POSIX target uses a checked-in, reproducible CoD4 build number.
+!src/buildnumber.h
 
 # Resources
 res/

@@ -1,94 +1,92 @@
-name: CI
+name: Native macOS CI
 
-# Manual-only trigger for now to avoid email spam during rapid port
-# iteration. Re-enable push/PR triggers once the pipeline stabilizes and
-# build-failure notifications become desirable again.
 on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: native-macos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  switch-build:
-    name: Cross-compile + NRO (Switch / devkitA64)
-    runs-on: ubuntu-latest
-    container:
-      image: devkitpro/devkita64:latest
+  source-and-build:
+    name: Source audit and arm64 build
+    runs-on: macos-15
+    timeout-minutes: 45
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out source
+        uses: actions/checkout@v4
 
-      - name: Show toolchain
+      - name: Verify native runner
         run: |
-          echo "DEVKITPRO=$DEVKITPRO"
-          aarch64-none-elf-gcc --version | head -1
-          cmake --version | head -1
+          test "$(uname -s)" = Darwin
+          test "$(uname -m)" = arm64
+          sw_vers
+          xcodebuild -version
 
-      - name: Configure
+      - name: Install build tools
+        run: brew install cmake ninja premake sdl2-compat glm ripgrep
+
+      - name: Audit the public source tree
+        shell: zsh {0}
         run: |
-          cmake -B build-switch -S . \
-            -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/Switch.cmake \
-            -DCMAKE_BUILD_TYPE=Release
+          set -euo pipefail
+          audit_dir="${RUNNER_TEMP}/public-source"
+          mac/tools/export-public-source.zsh "${audit_dir}"
+          cmp PUBLIC_SOURCE_MANIFEST.sha256 \
+            "${audit_dir}/PUBLIC_SOURCE_MANIFEST.sha256"
+          (
+            cd "${audit_dir}"
+            shasum -a 256 -c PUBLIC_SOURCE_MANIFEST.sha256 >/dev/null
+          )
 
-      - name: Build
-        run: cmake --build build-switch
-
-      - name: Verify NRO output
+      - name: Build pinned OpenAssetTools
+        shell: zsh {0}
         run: |
-          ls -la bin/switch/
-          file bin/switch/kisak_switch.nro
-          head -c 16 bin/switch/kisak_switch.nro | xxd
+          set -euo pipefail
+          oat_root="${RUNNER_TEMP}/OpenAssetTools"
+          git clone --recurse-submodules \
+            https://github.com/JGalbss/OpenAssetTools.git "${oat_root}"
+          git -C "${oat_root}" checkout --detach \
+            0ad64096aa6ee2874f835fff8a5c6dc4af8c7f77
+          git -C "${oat_root}" submodule update --init --recursive
+          "${oat_root}/mac-build.sh"
 
-      - name: Upload NRO artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: kisak_switch-nro
-          path: bin/switch/kisak_switch.nro
-
-  posix-build:
-    name: Configure + build + smoke (host POSIX)
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install deps (Linux)
-        if: runner.os == 'Linux'
+      - name: Configure native Metal client
+        shell: zsh {0}
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq cmake ninja-build libgl1-mesa-dev \
-            libsdl2-dev libopenal-dev libglm-dev zlib1g-dev
+          set -euo pipefail
+          cmake -S . -B build-ci -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=15.5 \
+            -DKISAK_TARGET=posix \
+            -DKISAK_METAL=ON \
+            -DOAT_ROOT="${RUNNER_TEMP}/OpenAssetTools"
 
-      - name: Install deps (macOS)
-        if: runner.os == 'macOS'
-        run: brew install ninja cmake sdl2-compat glm
+      - name: Build native client
+        run: cmake --build build-ci --target kisak_posix --parallel 3
 
-      - name: Configure
-        run: cmake -B build-posix -S . -G Ninja -DCMAKE_BUILD_TYPE=Debug -DKISAK_TARGET=posix
-
-      - name: Build
-        run: cmake --build build-posix
-
-      - name: Verify native executable
-        shell: bash
+      - name: Verify source-built outputs
+        shell: zsh {0}
         run: |
-          test -x 'bin/posix/jgalbs cod4'
-          file 'bin/posix/jgalbs cod4'
+          set -euo pipefail
+          client='bin/posix/jgalbs cod4'
+          test -x "${client}"
+          file "${client}" | grep -F 'Mach-O 64-bit executable arm64'
+          xcrun --sdk macosx clang++ -std=c++17 -Wall -Wextra -Werror \
+            -O2 mac/tools/iwi-cube-dump.cpp \
+            -o "${RUNNER_TEMP}/iwi-cube-dump"
+          file "${RUNNER_TEMP}/iwi-cube-dump" | \
+            grep -F 'Mach-O 64-bit executable arm64'
 
-  format-check:
-    name: EditorConfig / whitespace check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install editorconfig-checker
-        run: |
-          curl -sL https://github.com/editorconfig-checker/editorconfig-checker/releases/download/v3.0.3/ec-linux-amd64.tar.gz \
-            | sudo tar -xz -C /usr/local/bin --strip-components=1 bin/ec-linux-amd64
-          sudo mv /usr/local/bin/ec-linux-amd64 /usr/local/bin/ec
-      - name: Run editorconfig-checker
-        # Upstream sub-trees have inconsistent whitespace; only check files
-        # we have added under docs/ and .github/ for now.
-        run: ec docs .github CHANGELOG.md CONTRIBUTING.md
+      # This source CI intentionally uploads no application or disk image.
+      # Public binaries require Developer ID signing, notarization, final-DMG
+      # validation, and matching GPL corresponding source.

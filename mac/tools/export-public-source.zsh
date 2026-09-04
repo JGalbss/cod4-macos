@@ -222,6 +222,7 @@ required_files=(
     NOTICE
     THIRD_PARTY_NOTICES.txt
     CMakeLists.txt
+    src/buildnumber.h
     deps/ode/LICENSE-BSD.TXT
     deps/ode/LICENSE.TXT
     deps/speex/COPYING

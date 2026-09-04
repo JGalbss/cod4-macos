@@ -5,6 +5,13 @@ The project uses semantic versioning while the port is under active development.
 
 ## Unreleased
 
+### Changed
+
+- Replaced legacy Switch/Windows contribution templates with native Apple
+  Silicon issue, pull-request, and source-safety guidance.
+- CI now audits the sanitized source manifest and builds the Metal client on a
+  GitHub-hosted arm64 macOS runner without uploading unsigned binaries.
+
 ### Fixed
 
 - Preserved the projective screen-space coordinates used by legacy distortion

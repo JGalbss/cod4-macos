@@ -1,47 +1,90 @@
-name: Bug report
-description: Report a problem in the port
-labels: ["bug"]
+name: Native macOS bug
+description: Report a reproducible problem in the Apple Silicon client
+labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        Issues about the upstream Windows build belong in
-        [SwagSoftware/KisakCOD](https://github.com/SwagSoftware/KisakCOD/issues).
-        This tracker is specific to the Switch / macOS / Linux port.
-  - type: dropdown
-    id: platform
-    attributes:
-      label: Platform
-      options:
-        - macOS (ARM64)
-        - macOS (x86_64)
-        - Linux (ARM64)
-        - Linux (x86_64)
-        - Nintendo Switch (hardware)
-        - Nintendo Switch (Ryujinx/Yuzu)
-    validations:
-      required: true
+        This tracker covers the native arm64 macOS client. Upstream Windows
+        issues belong in [SwagSoftware/KisakCOD](https://github.com/SwagSoftware/KisakCOD/issues).
+
+        Do not upload retail game files, profiles, configuration files,
+        credentials, license keys, crash dumps containing private data, or
+        packaged applications. Redact local paths and server passwords.
+
   - type: input
-    id: commit
+    id: revision
     attributes:
-      label: Commit / branch
-      placeholder: "e.g. port/switch @ abc1234"
+      label: Client version or commit
+      description: Use the full commit SHA for a source build.
+      placeholder: Full 40-character Git commit SHA
     validations:
       required: true
+
+  - type: input
+    id: hardware
+    attributes:
+      label: Mac model and Apple chip
+      placeholder: MacBook Pro, Apple M3 Pro
+    validations:
+      required: true
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: 15.6.1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: build
+    attributes:
+      label: Build type
+      options:
+        - Local source build
+        - Local ad-hoc app or DMG
+        - Maintainer-signed release
+    validations:
+      required: true
+
+  - type: textarea
+    id: data
+    attributes:
+      label: Game-data setup
+      description: State the store/version and mod name only. Do not attach data or expose paths.
+      placeholder: Steam retail data, no mod
+    validations:
+      required: true
+
   - type: textarea
     id: repro
     attributes:
       label: Steps to reproduce
+      description: Include map, mode, relevant settings, and whether the problem is deterministic.
     validations:
       required: true
+
   - type: textarea
-    id: expected
+    id: result
     attributes:
-      label: Expected vs observed behavior
+      label: Expected and observed behavior
     validations:
       required: true
+
   - type: textarea
-    id: logs
+    id: diagnostics
     attributes:
-      label: Logs / stack trace
+      label: Redacted diagnostics
+      description: Paste the smallest useful console or crash excerpt after removing private data.
       render: shell
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Submission safety
+      options:
+        - label: I have not attached retail assets, credentials, or packaged binaries.
+          required: true
+        - label: I searched existing issues and tested a current revision when practical.
+          required: true

@@ -1,80 +1,71 @@
-# Contributing to KisakCOD-Switch
+# Contributing to jgalbs cod4
 
-This fork ports [KisakCOD](https://github.com/SwagSoftware/KisakCOD) — a
-decompilation of Call of Duty 4: Modern Warfare — to the Nintendo Switch via
-homebrew (devkitPro + libnx + Atmosphere CFW).
+This repository develops a native Apple Silicon macOS multiplayer client from
+the GPLv3 KisakCOD source. The supported development target is arm64 macOS
+15.5 or newer; Wine, DXVK, and Intel builds are outside this project's scope.
 
-## Before opening a PR
+## Before opening a pull request
 
-1. **Read [`docs/SWITCH_PORT.md`](docs/SWITCH_PORT.md)** — it describes the
-   three port phases and which one we are in. Changes that skip phases tend
-   to break things.
-2. **Keep PRs focused on one subsystem.** Upstream is divided into
-   `gfx_d3d`, `sound`, `win32`, etc. Each PR should touch **one** of these.
-3. **Do not distribute CoD4 assets.** This fork is source only. `.iwd`/`.ff`
-   files live on the user's SD card, never in the repo.
-4. **Preserve upstream compatibility.** When possible, land changes on the
-   upstream `master` and keep port-specific work on `port/switch`. Avoids
-   drift.
+1. Read [Development](docs/DEVELOPMENT.md) for the build setup and
+   [Validation](docs/VALIDATION.md) for the currently tested behavior.
+2. Keep the change focused on one subsystem. Renderer, input, audio,
+   networking, asset loading, gameplay, and release engineering are easier to
+   review and bisect independently.
+3. Do not commit or attach retail game data, including IWDs, fastfiles, maps,
+   textures, sounds, videos, profiles, configuration files, or screenshots
+   extracted from a game installation. Never include credentials or keys.
+4. Do not add downloaded binaries or package-manager output. A required
+   dependency needs a reproducible source build, a pinned revision or digest,
+   and its license recorded in `THIRD_PARTY_NOTICES.txt`.
+5. Preserve behavior on the native macOS path and explain any intentional
+   divergence from the upstream KisakCOD implementation.
+
+## Build and validation
+
+Build the `kisak_posix` target on Apple Silicon using the configuration in
+[Development](docs/DEVELOPMENT.md). Run the narrowest relevant checks and list
+their exact commands in the pull request. Rendering changes should include the
+affected map/material scenario; gameplay changes should include the applicable
+host/client or deterministic test.
+
+The public-source safety check is:
+
+```zsh
+staging_dir="$(mktemp -d "${TMPDIR:-/tmp}/cod4-public-review.XXXXXX")"
+mac/tools/export-public-source.zsh "$staging_dir"
+```
+
+The exporter must pass before source is published. Its output is source-only
+and is not a playable game or a signed binary release.
 
 ## Commit conventions
 
-[Conventional Commits](https://www.conventionalcommits.org/) is encouraged,
-not mandatory:
+Conventional Commit subjects are encouraged:
 
-```
-<type>(<scope>): <short description>
-
-[optional body]
-
-[optional footer]
+```text
+fix(metal): preserve projective distortion coordinates
+perf(audio): reduce mixer contention
+test(combat): cover grenade damage and respawn
 ```
 
-Common types: `feat`, `fix`, `refactor`, `perf`, `build`, `ci`, `docs`,
-`chore`, `port`. Scopes: subsystems (`gfx`, `sound`, `net`, `posix`,
-`switch`, `cmake`, `deps`, etc.).
+Use English for repository content and follow the surrounding upstream style.
+Avoid unrelated formatting changes. Update `CHANGELOG.md` under `Unreleased`
+for user-visible changes.
 
-Example:
+## Pull request checklist
 
-```
-port(gfx): replace D3DXMatrixIdentity with glm::mat4(1.0f)
+- The arm64 native target builds without retail data in the repository.
+- Relevant automated and manual validation is documented.
+- No proprietary assets, generated binaries, secrets, or local paths were
+  added.
+- New third-party code has a pinned source and complete license notice.
+- The public-source exporter still passes.
 
-The D3DX layer does not exist outside Windows. glm is header-only and
-already available via switch-glm on devkitPro.
-```
+## Releases and licensing
 
-All repo-tracked content (code, comments, docs, commit messages) is written
-in **English**.
-
-## Syncing with upstream
-
-The `upstream` remote points to `SwagSoftware/KisakCOD`. To pull changes:
-
-```bash
-git fetch upstream
-git checkout master
-git merge upstream/master
-git push origin master
-# then rebase port/switch onto the updated master:
-git checkout port/switch
-git rebase master
-```
-
-## Code style
-
-- Follow upstream style (Allman braces, snake_case variables, etc.). Do not
-  reformat existing files in feature PRs — open a separate formatting PR if
-  needed.
-- `.editorconfig` defines baseline EOL/indent rules.
-
-## Changelog
-
-Every user-visible change (non-chore) adds an entry to `CHANGELOG.md` under
-`[Unreleased]`, in the appropriate section (Added/Changed/Fixed/Removed/
-Security). Releases promote `[Unreleased]` into a versioned section.
-
-## License
-
-This project is GPL-3.0, inherited from upstream. Any contribution is
-automatically licensed under the same terms. You must have the right to
-contribute the code you submit.
+Pull requests must not publish ad-hoc-signed applications or disk images.
+Public binaries require the maintainer's Developer ID signature, Apple
+notarization and stapling, final-DMG validation, and matching GPL corresponding
+source. Contributions are licensed under GPLv3 unless an individual file
+states another compatible license; contributors must have the right to submit
+their work.
