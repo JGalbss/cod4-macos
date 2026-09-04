@@ -14,7 +14,9 @@ artifact validation in [Release](../../docs/RELEASE.md). Then generate the
 cask from the exact release DMG and matching tag:
 
 ```zsh
-mac/tools/prepare-homebrew-cask.zsh --tag v0.1.0
+mac/tools/prepare-homebrew-cask.zsh \
+  --tag v0.2.0 \
+  --source-sha "$(git rev-parse HEAD)"
 ```
 
 The command fails closed unless all of the following are true:

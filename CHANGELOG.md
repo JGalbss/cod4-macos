@@ -5,6 +5,10 @@ The project uses semantic versioning while the port is under active development.
 
 ## Unreleased
 
+No changes are currently queued beyond the 0.2.0 release candidate.
+
+## 0.2.0 release candidate - 2026-09-04
+
 ### Added
 
 - A safe local `/Applications` installer with dry-run, explicit replacement,
@@ -54,7 +58,7 @@ The project uses semantic versioning while the port is under active development.
 
 - `0.1.x`: source previews while renderer parity, compatibility, and packaging
   continue to stabilize. No public binary is implied by a source commit.
-- `0.2.0`: signed and notarized developer preview after final-DMG multiplayer,
+- `0.2.x`: signed and notarized developer previews after final-DMG multiplayer,
   update, crash/fuzz, and clean-Mac installation gates pass.
 - `1.0.0`: stable native multiplayer release after the supported map/mode
   matrix, long-session stability, performance targets, and documented data

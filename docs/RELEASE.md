@@ -141,7 +141,9 @@ supported Apple Silicon Mac.
 Only after publish mode succeeds, generate a cask from the exact notarized DMG:
 
 ```zsh
-mac/tools/prepare-homebrew-cask.zsh --tag v0.1.0
+mac/tools/prepare-homebrew-cask.zsh \
+  --tag v0.2.0 \
+  --source-sha "${RELEASE_REVISION}"
 ```
 
 The generator verifies the checksum, stapling, Gatekeeper acceptance,
@@ -163,7 +165,7 @@ After the notarized DMG exists:
 GITHUB_REPOSITORY=JGalbss/cod4-macos \
 RELEASE_TAG=v0.2.0 \
 RELEASE_SOURCE_SHA="${RELEASE_REVISION}" \
-RELEASE_NOTES=/absolute/path/to/release-notes.md \
+RELEASE_NOTES=docs/RELEASE_NOTES_v0.2.0.md \
 mac/updater/prepare_update_release.zsh
 
 RELEASE_SOURCE_SHA="${RELEASE_REVISION}" \

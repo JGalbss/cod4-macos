@@ -9,6 +9,7 @@ template="${repo_dir}/mac/homebrew/Casks/jgalbs-cod4.rb.in"
 dmg_path="${repo_dir}/dist/cod4-macos-arm64.dmg"
 repository='JGalbss/cod4-macos'
 release_tag=''
+source_sha=''
 force=0
 work_dir=''
 mount_dir=''
@@ -16,13 +17,14 @@ mounted=0
 
 usage() {
     cat <<'EOF'
-usage: prepare-homebrew-cask.zsh --tag TAG [options]
+usage: prepare-homebrew-cask.zsh --tag TAG --source-sha SHA [options]
 
 Generate a Homebrew cask from an already signed, notarized, and stapled DMG.
 This command validates and prepares local tap files; it never uploads or publishes.
 
 Options:
   --tag TAG            Release tag matching v<CFBundleShortVersionString>
+  --source-sha SHA     Exact 40-character public corresponding-source commit
   --repository O/R     GitHub repository (default: JGalbss/cod4-macos)
   --dmg PATH           Release DMG (default: dist/cod4-macos-arm64.dmg)
   --force              Replace an existing generated cask
@@ -62,6 +64,11 @@ while (( $# > 0 )); do
             repository="$2"
             shift 2
             ;;
+        (--source-sha)
+            (( $# >= 2 )) || fail '--source-sha requires a value'
+            source_sha="$2"
+            shift 2
+            ;;
         (--dmg)
             (( $# >= 2 )) || fail '--dmg requires a path'
             dmg_path="$2"
@@ -84,6 +91,12 @@ done
 [[ -n "${release_tag}" ]] || fail '--tag is required'
 [[ "${release_tag}" =~ '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$' ]] || fail 'tag must look like v1.2.3'
 [[ "${repository}" =~ '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' ]] || fail 'repository must be OWNER/REPOSITORY'
+[[ "${source_sha}" =~ '^[0-9a-fA-F]{40}$' ]] || fail '--source-sha must be an exact 40-character commit'
+(( $+commands[gh] )) || fail 'GitHub CLI (gh) is required to verify the public source commit'
+public_source_sha="$(gh api "repos/${repository}/commits/${source_sha}" --jq .sha 2>/dev/null)" \
+    || fail "source commit is not reachable in ${repository}: ${source_sha}"
+[[ "${public_source_sha:l}" == "${source_sha:l}" ]] \
+    || fail "GitHub resolved a different source commit than ${source_sha}"
 [[ -f "${template}" ]] || fail "cask template is missing: ${template}"
 [[ -f "${dmg_path}" ]] || fail "DMG is missing: ${dmg_path}"
 dmg_path="${dmg_path:A}"
@@ -144,8 +157,9 @@ for notice in GPL-3.0.txt NOTICE.txt THIRD-PARTY-NOTICES.txt SOURCE-NOTICE.txt; 
     [[ -s "${app}/Contents/Resources/${notice}" ]] || fail "bundle is missing required notice: ${notice}"
 done
 source_notice="${app}/Contents/Resources/SOURCE-NOTICE.txt"
-/usr/bin/grep -Fq "https://github.com/${repository}/tree/" "${source_notice}" || \
-    fail 'source notice does not identify an exact revision in the release repository'
+expected_source_url="https://github.com/${repository}/tree/${source_sha:l}"
+/usr/bin/grep -Fxiq "${expected_source_url}" "${source_notice}" || \
+    fail "source notice does not identify the exact release source: ${expected_source_url}"
 
 /usr/bin/hdiutil detach -quiet "${mount_dir}"
 mounted=0

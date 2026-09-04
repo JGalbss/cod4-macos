@@ -153,7 +153,7 @@ on fragile cross-release URL rewriting or delta state.
 GITHUB_REPOSITORY=JGalbss/cod4-macos \
 RELEASE_TAG=v0.2.0 \
 RELEASE_SOURCE_SHA="$(git rev-parse HEAD)" \
-RELEASE_NOTES=/absolute/path/to/notes.md \
+RELEASE_NOTES=docs/RELEASE_NOTES_v0.2.0.md \
 mac/updater/prepare_update_release.zsh
 ```
 
