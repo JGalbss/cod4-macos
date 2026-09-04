@@ -189,10 +189,11 @@ build_path_leaks="${stage_dir}/build-path-leaks.txt"
 while IFS= read -r -d '' candidate; do
     file "${candidate}" | grep -q 'Mach-O' || continue
     strings -a "${candidate}" | awk -v binary="${candidate}" '
+        $0 == "/tmp/XXXXXX.png" { next }
         (/^\/(Users|Volumes|tmp|var\/folders)\// ||
          /^\/private\/(tmp|var)\// ||
          /^\/opt\/homebrew\// ||
-         /^\/usr\/local\//) && $0 !~ /XXXXXX/ {
+         /^\/usr\/local\//) {
             print binary ": " $0
         }' >>"${build_path_leaks}"
 done < <(find "${stage_app}" -type f -print0)
