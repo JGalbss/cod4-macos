@@ -14,6 +14,7 @@
 // and it is what SDL_main does for you: run the game on a secondary thread and
 // leave the real main thread to Cocoa.
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -29,6 +30,8 @@
 #include <SDL.h>
 
 #include "gfx_gl/gl_renderer.h"
+#include "gfx_d3d/r_init.h"
+#include "client/client.h"
 #include "posix/posix_gl_present.h"
 #include "posix/posix_input.h"
 #if defined(__APPLE__) && defined(KISAK_SPARKLE_UPDATER)
@@ -50,6 +53,104 @@ namespace {
 
 constexpr int kWindowW = 1280;
 constexpr int kWindowH = 720;
+
+// CoD4's Direct3D renderer normally builds these enum domains from D3D display
+// modes. The native renderer has no D3D device, so register stable macOS window
+// sizes before profile cfg execution. This keeps the retail enum-list widgets
+// typed correctly instead of letting `seta` create generic string dvars.
+const char *kNativeWindowModes[] = {
+    "640x480",
+    "800x600",
+    "1024x768",
+    "1152x720",
+    "1280x720",
+    "1280x800",
+    "1440x900",
+    "1680x1050",
+    "1920x1080",
+    nullptr,
+};
+char g_nativeRefreshName[32] = "60 Hz";
+const char *g_nativeRefreshRates[] = { g_nativeRefreshName, nullptr };
+
+void RegisterNativeDisplayDvars()
+{
+    std::snprintf(g_nativeRefreshName, sizeof(g_nativeRefreshName), "%d Hz",
+                  std::max(posix_gl::DisplayFrequency(), 1));
+    Dvar_RegisterEnum("r_mode", kNativeWindowModes, 4,
+                      DVAR_ARCHIVE | DVAR_LATCH,
+                      "Native macOS window size");
+    Dvar_RegisterEnum("r_displayRefresh", g_nativeRefreshRates, 0,
+                      DVAR_ARCHIVE | DVAR_LATCH | DVAR_AUTOEXEC,
+                      "Refresh rate of the display containing the game window");
+}
+
+bool ParseWindowMode(const char *text, int *width, int *height)
+{
+    int parsedWidth = 0;
+    int parsedHeight = 0;
+    if (!text || std::sscanf(text, "%dx%d", &parsedWidth, &parsedHeight) != 2
+        || parsedWidth < 640 || parsedHeight < 480)
+    {
+        return false;
+    }
+    if (width)
+        *width = parsedWidth;
+    if (height)
+        *height = parsedHeight;
+    return true;
+}
+
+void UpdateNativeDisplayDvars(const int width, const int height, const bool resized)
+{
+    auto *const mode = const_cast<dvar_t *>(Dvar_FindVar("r_mode"));
+    auto *const refresh = const_cast<dvar_t *>(Dvar_FindVar("r_displayRefresh"));
+    static bool initialized = false;
+
+    if (!initialized)
+    {
+        // The former fixed-size native build ignored its saved Windows mode.
+        // Preserve the effective 1280x720 startup behavior, then let later
+        // Apply operations change the actual AppKit window.
+        char actualMode[32];
+        std::snprintf(actualMode, sizeof(actualMode), "%dx%d", width, height);
+        if (mode)
+            Dvar_SetFromString(mode, actualMode);
+        if (refresh)
+            Dvar_SetFromString(refresh, g_nativeRefreshName);
+        initialized = true;
+    }
+
+    if (mode && Dvar_HasLatchedValue(mode))
+    {
+        int requestedWidth = 0;
+        int requestedHeight = 0;
+        const char *const requested = Dvar_DisplayableLatchedValue(mode);
+        if (ParseWindowMode(requested, &requestedWidth, &requestedHeight))
+        {
+            Dvar_MakeLatchedValueCurrent(mode);
+            posix_gl::RequestWindowSize(requestedWidth, requestedHeight);
+            Com_Printf(8, "[posix] applying native video mode %dx%d\n",
+                       requestedWidth, requestedHeight);
+        }
+    }
+
+    // Keep the selector accurate after a user drags the window or returns from
+    // a native full-screen Space, but only when that exact size is in its domain.
+    if (resized && mode)
+    {
+        char actualMode[32];
+        std::snprintf(actualMode, sizeof(actualMode), "%dx%d", width, height);
+        for (int index = 0; kNativeWindowModes[index]; ++index)
+        {
+            if (!std::strcmp(kNativeWindowModes[index], actualMode))
+            {
+                Dvar_SetFromString(mode, actualMode);
+                break;
+            }
+        }
+    }
+}
 
 char g_cmdline[1024] = "";
 
@@ -177,6 +278,53 @@ void InstallCrashHandlers()
         (void)sigaction(signalNumber, &action, nullptr);
 }
 
+void UpdateVideoConfiguration()
+{
+    int width = 0;
+    int height = 0;
+    posix_gl::WindowSize(&width, &height);
+    if (width <= 0 || height <= 0)
+        return;
+
+    const bool resized = cls.vidConfig.displayWidth != static_cast<uint32_t>(width)
+        || cls.vidConfig.displayHeight != static_cast<uint32_t>(height);
+    UpdateNativeDisplayDvars(width, height, resized);
+    if (!resized)
+        return;
+
+    const bool fullscreen = posix_gl::Window()
+        && (SDL_GetWindowFlags(posix_gl::Window()) & SDL_WINDOW_FULLSCREEN) != 0;
+    const float aspect = static_cast<float>(width) / static_cast<float>(height);
+    const auto apply = [&](vidConfig_t &config) {
+        config.sceneWidth = static_cast<uint32_t>(width);
+        config.sceneHeight = static_cast<uint32_t>(height);
+        config.displayWidth = static_cast<uint32_t>(width);
+        config.displayHeight = static_cast<uint32_t>(height);
+        config.displayFrequency = static_cast<uint32_t>(posix_gl::DisplayFrequency());
+        config.isFullscreen = fullscreen ? 1 : 0;
+        config.aspectRatioWindow = aspect;
+        config.aspectRatioScenePixel = 1.0f;
+        config.aspectRatioDisplayPixel = 1.0f;
+    };
+    apply(vidConfig);
+    apply(cls.vidConfig);
+
+    // Screen placement is derived from vidConfig only during renderer init in
+    // the original fixed-size path. Rebuild it after every native resize so
+    // full-screen backgrounds, HUD anchors, menus, and mouse coordinates all
+    // use the entire macOS content area on the next frame.
+    ScrPlace_SetupUnsafeViewport(&scrPlaceFullUnsafe, 0, 0, width, height);
+    ScrPlace_SetupViewport(&scrPlaceFull, 0, 0, width, height);
+    ScrPlace_SetupViewport(&scrPlaceView[0], 0, 0, width, height);
+    g_console_field_width = width - 48;
+    g_consoleField.widthInPixels = g_console_field_width;
+    if (com_wideScreen)
+        Dvar_SetBool(const_cast<dvar_t *>(com_wideScreen), aspect > 1.4f);
+
+    Com_Printf(8, "[posix] video resized: %dx%d points, aspect %.3f, fullscreen=%d\n",
+               width, height, aspect, fullscreen ? 1 : 0);
+}
+
 void *engine_thread(void *)
 {
 #if defined(__APPLE__)
@@ -216,10 +364,12 @@ void *engine_thread(void *)
 
     Com_InitParse();
     Dvar_Init();
+    RegisterNativeDisplayDvars();
     Sys_Milliseconds();          // seeds the timer base
     Com_Init(g_cmdline);
 
     for (;;) {
+        UpdateVideoConfiguration();
         Com_Frame();
     }
     return nullptr;
@@ -297,5 +447,6 @@ int main(int argc, char **argv)
             handle(ev);
 
         posix_input::UpdateMainThread();
+        posix_gl::UpdateWindowMainThread();
     }
 }

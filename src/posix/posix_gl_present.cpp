@@ -15,6 +15,7 @@
 #include <SDL.h>
 #include <SDL_opengl.h>
 
+#include <atomic>
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -25,6 +26,7 @@ namespace posix_gl {
 namespace {
 
 SDL_Window *g_window = nullptr;
+std::atomic<unsigned long long> g_requestedWindowSize{0};
 #ifndef KISAK_DXVK
 SDL_GLContext g_context = nullptr;
 #endif
@@ -243,7 +245,8 @@ bool CreateWindow(const int width, const int height)
     // DXVK puts a Metal surface on this window, which cannot share it with a GL
     // context, so under DXVK the window is created plain and gfx_gl never runs.
     g_window = SDL_CreateWindow("jgalbs cod4", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                width, height, SDL_WINDOW_SHOWN);
+                                width, height, SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI
+                                    | SDL_WINDOW_RESIZABLE);
     if (!g_window)
     {
         std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
@@ -264,7 +267,8 @@ bool CreateWindow(const int width, const int height)
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
     g_window = SDL_CreateWindow("jgalbs cod4", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                width, height, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+                                width, height, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN
+                                    | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE);
     if (!g_window)
     {
         std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
@@ -372,6 +376,12 @@ void PresentFrame()
 {
     if (!g_ready)
         return;
+
+    int drawableWidth = 0;
+    int drawableHeight = 0;
+    SDL_GL_GetDrawableSize(g_window, &drawableWidth, &drawableHeight);
+    if (drawableWidth > 0 && drawableHeight > 0)
+        gfx_gl::set_viewport(drawableWidth, drawableHeight);
 
     DispatchCommands(CurrentCommands());
     gfx_gl::flush_ui();
@@ -494,6 +504,39 @@ bool HasWindow()
 int DisplayFrequency()
 {
     return g_displayFrequency;
+}
+
+void WindowSize(int *width, int *height)
+{
+    int w = 0;
+    int h = 0;
+    if (g_window)
+        SDL_GetWindowSize(g_window, &w, &h);
+    if (width)
+        *width = w;
+    if (height)
+        *height = h;
+}
+
+void RequestWindowSize(const int width, const int height)
+{
+    if (width < 640 || height < 480)
+        return;
+    const auto packed = (static_cast<unsigned long long>(static_cast<unsigned int>(width)) << 32)
+        | static_cast<unsigned int>(height);
+    g_requestedWindowSize.store(packed, std::memory_order_release);
+}
+
+void UpdateWindowMainThread()
+{
+    if (!g_window || (SDL_GetWindowFlags(g_window) & SDL_WINDOW_FULLSCREEN) != 0)
+        return;
+    const auto packed = g_requestedWindowSize.exchange(0, std::memory_order_acq_rel);
+    if (!packed)
+        return;
+    const int width = static_cast<int>(packed >> 32);
+    const int height = static_cast<int>(packed & 0xffffffffu);
+    SDL_SetWindowSize(g_window, width, height);
 }
 
 void DrawableSize(int *width, int *height)

@@ -36,6 +36,10 @@ No changes are currently queued beyond the 0.2.0 release candidate.
   so smoke, debris, fire, and distortion no longer inherit material slot zero.
 - Corrected native Metal FX sampling, depth, alpha-test, culling, and tangent
   semantics used by explosions and other translucent effects.
+- Enabled the standard macOS full-screen control and made live window/full-screen
+  transitions rebuild viewport, projection, HUD, menu, console, and mouse geometry.
+- Restored native Video Mode and Screen Refresh Rate enum registration for the
+  retail Graphics menu, and made applied windowed modes resize the AppKit window.
 - Removed absolute build-machine runtime paths from packaged applications and
   made DMG installation verify its SHA-256 sidecar before mounting.
 - Normalized compiler source/debug paths and made packaging reject embedded

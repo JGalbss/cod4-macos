@@ -29,6 +29,11 @@ bool HasWindow();
 // the engine thread do not have to touch Cocoa.
 int DisplayFrequency();
 
+// Engine-thread request and main-thread application for a windowed video-mode
+// change. AppKit window mutation must stay on the process main thread.
+void RequestWindowSize(int width, int height);
+void UpdateWindowMainThread();
+
 // Main-thread macOS helpers used before engine startup. They remember a
 // user-selected retail CoD4 data folder and keep writable client data in the
 // normal Application Support location instead of modifying the installation.
@@ -42,6 +47,10 @@ bool WritableGameDataDirectory(char *path, std::size_t pathSize);
 // Write the next presented frame to fs_basepath/screenshots as a PPM. Backs the
 // "screenshot" console command, since the D3D screenshot path is not built here.
 void RequestFrameDump();
+
+// Window content size in logical points. CoD4's UI and vidConfig operate in
+// this coordinate space; DrawableSize below is the Retina pixel resolution.
+void WindowSize(int *width, int *height);
 
 // Window size in pixels, for mapping the OS cursor into the UI's 640x480 canvas.
 void DrawableSize(int *width, int *height);
