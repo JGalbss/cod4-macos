@@ -47,6 +47,10 @@ path.
 See `docs/VALIDATION.md` for evidence paths and the distinction between tested
 behavior and broader compatibility claims.
 
+The verified local DMG SHA-256 is
+`047240bcb288304c6db35f74ef268d80d05483376f64ba8478d0c9235416056d`.
+It installs version 0.2.1/build 3 and links the bundled updater and runtime.
+
 ## Requirements and release status
 
 - Apple Silicon and macOS 15.5 or newer.

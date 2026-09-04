@@ -83,6 +83,20 @@ complete compatibility. Results below were observed during development through
   the difference from the raw tested binary is expected from install-name
   rewriting and app-bundle signing. This candidate remains a local ad-hoc build,
   not a public release.
+- The local 0.2.1/build-3 candidate DMG SHA-256 is
+  `047240bcb288304c6db35f74ef268d80d05483376f64ba8478d0c9235416056d`;
+  its packaged executable SHA-256 is
+  `97d7381008ab607c56126767e4e7759537f2c75e0b9cc2d0172926fd4eba7f0c`.
+  It passed checksum and disk-image verification, deep code-sign structure,
+  bundled SDL and Sparkle verification, and a retail-asset exclusion scan. The
+  installed app reached active `mp_vacant`, reported the updater available,
+  created the `jgalbs` Favorite on a clean profile, and quit cleanly; evidence
+  is in `/tmp/cod4-installed-0.2.1.U80TCW`. The same installed package passed
+  Rust and Terminal gameplay smokes in `/tmp/cod4-installed-custom.2NSgpu`.
+  A live protocol-21 connection followed by a local `mp_vacant` listen-server
+  transition also reached active gameplay and exited cleanly; evidence is in
+  `/tmp/cod4-protocol-handoff-auth.WQ1eoE`. The corresponding build source is
+  public commit `3dfcd32be2175f7c53a6ca60cb18cc0a85ccda76`.
 - The car-effect audit found no missing asset. The observed car debris and
   shellshock are authored effects, not a missing-resource fallback.
 - The exact post-LP64-fix raw executable SHA-256 is
