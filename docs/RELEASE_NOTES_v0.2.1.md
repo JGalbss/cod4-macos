@@ -33,10 +33,11 @@ browser reliability, and release-blocking rendering and LP64 correctness.
 ## Validation scope
 
 The exact raw arm64 executable SHA-256
-`6b88b4ab056c4befd14d8327a658c8a565d22836dae46fdba581bad90fe8e306`
-passed a five-map 600-frame stock fuzz run, clean Rust and Terminal gameplay,
-the two-client bullet/death/score/killcam/respawn cycle, a stable full-color
-countdown-to-gameplay transition, and both direct and stock night-vision input.
+`e6be6d01548eafd3c968614191c7e80d0006414ecc5b3ef246c1a9a502d88499`
+is linked to the bundled Sparkle updater and passed a five-map 600-frame stock
+fuzz run, the two-client bullet/death/score/killcam/respawn cycle, and a neutral
+full-color to night-vision to full-color round trip. A renderer-equivalent
+pre-updater-link executable passed clean Rust and Terminal gameplay.
 A separate clean-home live CoD4x test negotiated protocol 21, declined an HTTP
 redirect, downloaded the 1,355,335-byte Highrise IWD with CRC verification,
 installed it atomically, and advanced to the next file. The focused LP64 audit

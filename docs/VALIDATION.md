@@ -107,22 +107,23 @@ complete compatibility. Results below were observed during development through
 - Favorites now bypass the Internet browser's empty/full/pure visibility
   filters. This preserves the user's filter choices while ensuring a persisted
   favorite remains listed and joinable from the Favorites source.
-- The exact frozen 0.2.1 raw arm64 executable SHA-256 is
-  `6b88b4ab056c4befd14d8327a658c8a565d22836dae46fdba581bad90fe8e306`.
-  It passed five 600-frame stock fuzz cases (`mp_vacant`, `mp_crash`,
+- The updater-enabled 0.2.1 raw arm64 release executable SHA-256 is
+  `e6be6d01548eafd3c968614191c7e80d0006414ecc5b3ef246c1a9a502d88499`.
+  A locked copy passed five 600-frame stock fuzz cases (`mp_vacant`, `mp_crash`,
   `mp_shipment`, `mp_backlot`, and `mp_strike`) with seed `20260904`; evidence
-  is in `/tmp/kisak-native-fuzz.qoOSAM`. The same executable passed clean-home
+  is in `/tmp/kisak-native-fuzz.2UEs1F`.
+- That exact locked executable also passed the two-client standard-combat gate:
+  real bullet damage, authoritative deaths, attacker scoring, killcam
+  entry/exit, and full-health respawns. Evidence is in
+  `/tmp/kisak-native-combat.V76rh7`.
+- On that exact executable, the normal `mpintro` and `mp_vacant` base grades
+  remained neutral and full-color. Direct `+nightvision` entered the authored
+  green `default_night` grade, and a second press restored the neutral grade.
+  Evidence is in `/tmp/cod4-release-vision-roundtrip.WCHr6V`.
+- The renderer-equivalent pre-updater-link executable passed clean-home
   movement, firing, reload, mouse-look, audio, capture, and clean-exit smokes on
   `mp_mw2_rust` and `mp_mw2_term`; evidence is in
   `/tmp/cod4-frozen-custom-smoke.oYXRPx`.
-- That exact executable also passed the two-client standard-combat gate: real
-  bullet damage, authoritative deaths, attacker scoring, killcam entry/exit,
-  and full-health respawns. Evidence is in `/tmp/kisak-native-combat.S8iGBT`.
-- On that exact executable, fixed-view countdown and active-gameplay captures
-  retain a neutral full-color base grade, direct `+nightvision` and the stock
-  action-slot binding both enter the authored green `default_night` grade, and
-  toggling off restores the neutral grade. Evidence is in
-  `/tmp/cod4-frozen-final.7eKK0d`.
 - A clean-profile startup created a cache with one Favorite named `jgalbs` at
   `159.65.37.227:28961` without touching the normal user profile. Evidence is
   in `/tmp/cod4-favorite-final.01xZqP`.
