@@ -131,6 +131,8 @@ build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${plist}" 2>/dev/n
 architectures="$(/usr/bin/lipo -archs "${app}/Contents/MacOS/${executable}" 2>/dev/null)" || fail 'could not inspect executable architectures'
 [[ " ${architectures} " == *' arm64 '* ]] || fail 'bundle executable does not contain arm64'
 /usr/bin/codesign --verify --deep --strict "${app}" >/dev/null 2>&1 || fail 'bundle code-signature verification failed'
+"${repo_dir}/mac/updater/verify_updater_bundle.zsh" "${app}" >/dev/null \
+    || fail 'bundle updater integration failed validation'
 
 signature_info="$(/usr/bin/codesign -dvvv "${app}" 2>&1)" || fail 'could not inspect the app signature'
 [[ "${signature_info}" == *$'Authority=Developer ID Application:'* ]] || fail 'app is not signed by a Developer ID Application identity'

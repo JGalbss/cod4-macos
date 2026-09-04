@@ -144,9 +144,10 @@ mac/updater/verify_updater_bundle.zsh 'dist/jgalbs cod4.app'
 ## Prepare a signed GitHub release
 
 Package, Developer-ID sign, notarize, and staple the DMG first. Sparkle must
-sign the exact final bytes users download. Keep `dist/updates` (or another
-protected update archive directory) between releases so `generate_appcast`
-can preserve old feed entries and produce binary deltas.
+sign the exact final bytes users download. The production appcast contains one
+full latest update. GitHub retains immutable older releases for version history,
+and any older app can jump directly to the newest full archive without relying
+on fragile cross-release URL rewriting or delta state.
 
 ```zsh
 GITHUB_REPOSITORY=JGalbss/cod4-macos \
@@ -159,7 +160,10 @@ mac/updater/prepare_update_release.zsh
 The preparation tool verifies the mounted app, framework link, signing keys,
 feed URL, bundle versions, and signed-feed policy; creates a versioned DMG copy
 and checksum; invokes Sparkle's `generate_appcast`; and verifies that the feed
-is signed and points at the matching GitHub Release asset.
+is signed and points at the matching GitHub Release asset. It generates the
+single-entry feed in a transaction, keeps the generic Homebrew DMG outside
+Sparkle's scan under `dist/release/TAG`, and swaps validated output into place
+only after every check passes.
 
 By default signing uses the `jgalbs-cod4` Keychain account. In non-interactive
 CI, pass the private seed only over standard input instead of writing it into
@@ -181,8 +185,8 @@ RELEASE_SOURCE_SHA="$(git rev-parse HEAD)" \
 
 The script refuses private repositories, non-draft existing releases, and any
 DMG that fails Developer ID, notarization, stapling, or Gatekeeper checks. It
-uploads the generic Homebrew DMG, versioned update archive, generated deltas,
-checksums, and signed appcast while the release is hidden, then verifies the
+uploads the generic Homebrew DMG, versioned update archive, checksums, and
+signed appcast while the release is hidden, then verifies the
 remote asset list. Final promotion is intentionally separate so a partially
 uploaded feed is never exposed at `releases/latest/download/appcast.xml`.
 

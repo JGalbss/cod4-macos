@@ -13,7 +13,7 @@ The project uses semantic versioning while the port is under active development.
   Developer ID, hardened-runtime, notarization, Gatekeeper, checksum, bundle,
   architecture, and corresponding-source checks.
 - Signed Sparkle feed tooling with exact source/tag/version validation and
-  complete generic, versioned, checksum, and delta asset manifests.
+  complete generic, versioned, and checksum asset manifests.
 
 ### Changed
 

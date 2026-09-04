@@ -153,8 +153,10 @@ for the separate tap review workflow.
 ## 6. Prepare the signed Sparkle update
 
 Sparkle's private Ed25519 seed belongs in the login Keychain or an encrypted
-offline backup, never in Git or on the update host. Keep old archives in the
-protected updates directory so Sparkle can preserve feed entries and deltas.
+offline backup, never in Git or on the update host. The signed production feed
+contains one full latest archive; GitHub Releases preserve older immutable
+versions. The generic Homebrew DMG is staged separately under
+`dist/release/TAG` so Sparkle never scans a duplicate bundle version.
 After the notarized DMG exists:
 
 ```zsh

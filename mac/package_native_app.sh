@@ -227,6 +227,7 @@ done
 codesign "${sign_options[@]}" "${stage_app}" >/dev/null
 codesign --verify --deep --strict --verbose=2 "${stage_app}"
 "${repo_dir}/mac/tools/verify-bundled-sdl.zsh" "${stage_app}"
+"${repo_dir}/mac/updater/verify_updater_bundle.zsh" "${stage_app}"
 mkdir -p "${output_dir}"
 
 new_app="${output_dir}/${app_bundle}.new"

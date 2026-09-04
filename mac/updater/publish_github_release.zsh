@@ -12,6 +12,10 @@ github_repository="$1"
 release_tag="$2"
 manifest="${3:-${repo_dir}/dist/updates/publish-${release_tag}.txt}"
 release_source_sha="${RELEASE_SOURCE_SHA:-}"
+sparkle_root="${SPARKLE_ROOT:-${repo_dir}/mac/vendor/Sparkle}"
+sign_update="${sparkle_root}/bin/sign_update"
+key_account="${SPARKLE_KEY_ACCOUNT:-jgalbs-cod4}"
+key_file="${SPARKLE_ED_KEY_FILE:-}"
 
 if [[ "${github_repository}" != */* || "${release_tag}" == */* ]]; then
     print -u2 "Invalid repository or release tag."
@@ -23,6 +27,10 @@ if [[ ! -f "${manifest}" ]]; then
 fi
 if ! command -v gh >/dev/null; then
     print -u2 "GitHub CLI (gh) is required."
+    exit 1
+fi
+if [[ ! -x "${sign_update}" ]]; then
+    print -u2 "Sparkle sign_update is required to verify appcast.xml."
     exit 1
 fi
 if [[ ! "${release_source_sha}" =~ '^[0-9a-fA-F]{40}$' ]]; then
@@ -95,6 +103,14 @@ if ! /usr/bin/grep -Fq "/releases/download/${release_tag}/" "${appcast_asset}"; 
     print -u2 "Appcast does not target release ${release_tag}."
     exit 1
 fi
+/usr/bin/xmllint --noout "${appcast_asset}" \
+    || { print -u2 "Appcast is not valid XML."; exit 1; }
+key_args=(--account "${key_account}")
+if [[ -n "${key_file}" ]]; then
+    key_args=(--ed-key-file "${key_file}")
+fi
+"${sign_update}" --verify "${key_args[@]}" "${appcast_asset}" \
+    || { print -u2 "Appcast signature verification failed."; exit 1; }
 
 publish_temp="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/jgalbs-cod4-publish-audit.XXXXXX")"
 publish_mount="${publish_temp}/mount"
@@ -133,6 +149,11 @@ publish_signature="$(/usr/bin/codesign -dvvv "${publish_app}" 2>&1)"
 publish_mounted=0
 
 # Do not mutate GitHub until every local artifact has passed its release gates.
+if tag_sha="$(gh api "repos/${github_repository}/commits/${release_tag}" \
+    --jq .sha 2>/dev/null)"; then
+    [[ "${tag_sha}" == "${release_source_sha:l}" ]] \
+        || { print -u2 "Existing tag ${release_tag} does not point at RELEASE_SOURCE_SHA."; exit 1; }
+fi
 if gh release view "${release_tag}" --repo "${github_repository}" >/dev/null 2>&1; then
     is_draft="$(gh release view "${release_tag}" --repo "${github_repository}" \
         --json isDraft --jq .isDraft)"
@@ -140,9 +161,14 @@ if gh release view "${release_tag}" --repo "${github_repository}" >/dev/null 2>&
         print -u2 "Release ${release_tag} already exists and is not a draft; refusing partial publication."
         exit 1
     fi
+    target_commitish="$(gh release view "${release_tag}" --repo "${github_repository}" \
+        --json targetCommitish --jq .targetCommitish)"
+    [[ "${target_commitish}" == "${release_source_sha:l}" ]] \
+        || { print -u2 "Draft release target is not RELEASE_SOURCE_SHA."; exit 1; }
 else
     gh release create "${release_tag}" --repo "${github_repository}" \
-        --draft --title "jgalbs cod4 ${release_tag}" --generate-notes
+        --target "${release_source_sha:l}" --draft \
+        --title "jgalbs cod4 ${release_tag}" --generate-notes
 fi
 
 # Keep the release draft until all authenticated artifacts and the signed feed
