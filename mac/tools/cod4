@@ -1,0 +1,157 @@
+#!/bin/zsh
+# Small native-client launcher and private server-control entry point.
+set -euo pipefail
+
+server_address="${COD4_SERVER_ADDRESS:-159.65.37.227}"
+ssh_target="${COD4_CONTROL_SSH:-root@${server_address}}"
+remote_port="${COD4_CONTROL_REMOTE_PORT:-8787}"
+requested_port="${COD4_CONTROL_LOCAL_PORT:-8787}"
+control_root="${COD4_CONTROL_HOME:-${HOME}/Library/Application Support/jgalbs cod4/control}"
+control_socket="${control_root}/ssh.sock"
+port_file="${control_root}/port"
+
+fail() { print -u2 -- "cod4: $*"; exit 1; }
+note() { print -- "cod4: $*"; }
+
+usage() {
+    cat <<'EOF'
+cod4                     open the native jgalbs cod4 client
+cod4 menu                open the private server control panel
+cod4 menu stop           close the control panel's SSH tunnel
+cod4 server status       show the live map and players
+cod4 server console      open an interactive server console
+cod4 server <command>    run any cod4ctl server command
+EOF
+}
+
+case "${requested_port}:${remote_port}" in
+    (*[!0-9:]*|:*|*:) fail 'control ports must be numbers' ;;
+esac
+if (( requested_port < 1 || requested_port > 65515 ||
+      remote_port < 1 || remote_port > 65535 )); then
+    fail 'control ports are out of range'
+fi
+
+mkdir -p "${control_root}"
+chmod 0700 "${control_root}"
+
+health_ok() {
+    /usr/bin/curl -fsS --max-time 1 \
+        "http://127.0.0.1:${1}/api/health" 2>/dev/null |
+        /usr/bin/grep -q '"ok"[[:space:]]*:[[:space:]]*true'
+}
+
+master_running() {
+    [[ -S "${control_socket}" ]] &&
+        /usr/bin/ssh -S "${control_socket}" -O check "${ssh_target}" \
+            >/dev/null 2>&1
+}
+
+open_panel() {
+    local url="http://127.0.0.1:${1}"
+    note "opening server controls at ${url}"
+    if [[ "${COD4_CONTROL_NO_OPEN:-0}" != 1 ]]; then
+        /usr/bin/open "${url}" || fail "could not open ${url}"
+    fi
+}
+
+stop_tunnel() {
+    if master_running; then
+        /usr/bin/ssh -S "${control_socket}" -O exit "${ssh_target}" \
+            >/dev/null 2>&1 || true
+        note 'control tunnel stopped'
+    else
+        [[ -S "${control_socket}" ]] && /usr/bin/unlink "${control_socket}"
+        note 'control tunnel is not running'
+    fi
+}
+
+start_menu() {
+    local port candidate attempt
+    if master_running; then
+        if [[ -r "${port_file}" ]]; then
+            port="$(<"${port_file}")"
+        else
+            port="${requested_port}"
+        fi
+        if health_ok "${port}"; then
+            open_panel "${port}"
+            return
+        fi
+        /usr/bin/ssh -S "${control_socket}" -O exit "${ssh_target}" \
+            >/dev/null 2>&1 || true
+    fi
+    [[ -S "${control_socket}" ]] && /usr/bin/unlink "${control_socket}"
+
+    port=''
+    candidate="${requested_port}"
+    while (( candidate <= requested_port + 20 )); do
+        if health_ok "${candidate}"; then
+            open_panel "${candidate}"
+            return
+        fi
+        if ! /usr/sbin/lsof -nP -iTCP:"${candidate}" -sTCP:LISTEN \
+            >/dev/null 2>&1; then
+            port="${candidate}"
+            break
+        fi
+        (( candidate++ ))
+    done
+    [[ -n "${port}" ]] || fail 'could not find a free local control port'
+
+    note 'opening secure control tunnel'
+    /usr/bin/ssh -fMN \
+        -S "${control_socket}" \
+        -o ControlMaster=yes \
+        -o ControlPersist=4h \
+        -o ConnectTimeout=8 \
+        -o ExitOnForwardFailure=yes \
+        -o ServerAliveInterval=30 \
+        -o ServerAliveCountMax=3 \
+        -L "127.0.0.1:${port}:127.0.0.1:${remote_port}" \
+        "${ssh_target}" || fail "SSH could not reach ${ssh_target}"
+    print -rn -- "${port}" >"${port_file}"
+
+    attempt=0
+    while (( attempt < 30 )); do
+        if health_ok "${port}"; then
+            open_panel "${port}"
+            return
+        fi
+        /bin/sleep 0.2
+        (( attempt += 1 ))
+    done
+    /usr/bin/ssh -S "${control_socket}" -O exit "${ssh_target}" \
+        >/dev/null 2>&1 || true
+    fail 'the tunnel opened, but the control panel did not answer'
+}
+
+command_name="${1:-play}"
+shift || true
+case "${command_name}" in
+    (play)
+        /usr/bin/open -a 'jgalbs cod4'
+        ;;
+    (menu|control)
+        if [[ "${1:-}" == stop ]]; then
+            stop_tunnel
+        elif (( $# == 0 )); then
+            start_menu
+        else
+            fail 'usage: cod4 menu [stop]'
+        fi
+        ;;
+    (server)
+        if [[ "${1:-console}" == console ]]; then
+            [[ $# == 0 ]] || shift
+            exec /usr/bin/ssh -t "${ssh_target}" cod4ctl console "$@"
+        fi
+        exec /usr/bin/ssh "${ssh_target}" cod4ctl "$@"
+        ;;
+    (-h|--help|help)
+        usage
+        ;;
+    (*)
+        fail "unknown command: ${command_name} (run: cod4 --help)"
+        ;;
+esac

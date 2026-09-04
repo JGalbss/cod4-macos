@@ -1,0 +1,40 @@
+[Unit]
+Description=Private CoD4 web and CLI control plane
+After=network-online.target cod4.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cod4
+Group=cod4
+Environment=COD4_HOST=127.0.0.1
+Environment=COD4_PORT=28961
+Environment=COD4_RCON_FILE=/etc/cod4-control/rcon_password
+EnvironmentFile=-/etc/cod4-control/environment
+ExecStart=/usr/local/bin/cod4ctl web --listen 127.0.0.1 --web-port 8787
+Restart=on-failure
+RestartSec=3
+UMask=0077
+
+# The panel only needs UDP to the local game server and TCP on loopback.
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

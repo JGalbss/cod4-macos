@@ -251,9 +251,22 @@ required_files=(
     mac/package_native_app.sh
     mac/RELEASE_README.txt
     mac/tools/install-local-app.zsh
+    mac/tools/cod4
     mac/tools/prepare-homebrew-cask.zsh
     mac/homebrew/README.md
     mac/homebrew/Casks/jgalbs-cod4.rb.in
+    server/README.md
+    server/MAPS.md
+    server/cod4ctl.py
+    server/configure.sh
+    server/control.sh
+    server/cod4-control.service
+    server/harden.sh
+    server/maps.sh
+    server/patch-progression.py
+    server/provision.sh
+    server/test_cod4ctl.py
+    server/verify-server.py
 )
 for required_file in "${required_files[@]}"; do
     if [[ ! -f "${destination}/${required_file}" ]]; then
