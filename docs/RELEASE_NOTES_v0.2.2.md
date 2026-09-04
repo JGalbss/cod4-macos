@@ -27,6 +27,13 @@ fuzz cases; and a native macOS full-screen state check.
 
 See `docs/VALIDATION.md` for artifact paths and the limits of these claims.
 
+The verified local DMG SHA-256 is
+`4cd7ddd387d59312ddcd396b130d65ea02de6ee73a8e7fc4da756969ba5e41c4`.
+Its packaged executable SHA-256 is
+`2b6b6c6b375a16c0f715cb6d36323161519072a9652b67dcd815729ef9fb6aa6`.
+The package embeds corresponding source revision
+`b1012a8238cb79a3d3db334f2292626dbff59e72`.
+
 ## Requirements and release status
 
 - Apple Silicon and macOS 15.5 or newer.

@@ -143,7 +143,7 @@ Only after publish mode succeeds, generate a cask from the exact notarized DMG:
 
 ```zsh
 mac/tools/prepare-homebrew-cask.zsh \
-  --tag v0.2.1 \
+  --tag v0.2.2 \
   --source-sha "${RELEASE_REVISION}"
 ```
 
@@ -164,13 +164,13 @@ After the notarized DMG exists:
 
 ```zsh
 GITHUB_REPOSITORY=JGalbss/cod4-macos \
-RELEASE_TAG=v0.2.1 \
+RELEASE_TAG=v0.2.2 \
 RELEASE_SOURCE_SHA="${RELEASE_REVISION}" \
-RELEASE_NOTES=docs/RELEASE_NOTES_v0.2.1.md \
+RELEASE_NOTES=docs/RELEASE_NOTES_v0.2.2.md \
 mac/updater/prepare_update_release.zsh
 
 RELEASE_SOURCE_SHA="${RELEASE_REVISION}" \
-  mac/updater/publish_github_release.zsh JGalbss/cod4-macos v0.2.1
+  mac/updater/publish_github_release.zsh JGalbss/cod4-macos v0.2.2
 ```
 
 The publisher creates or updates a draft and verifies its assets. Draft assets
@@ -182,7 +182,7 @@ staging update installs, relaunches, preserves external data/profile state, and
 passes a multiplayer join/quit smoke test, promote the draft:
 
 ```zsh
-gh release edit v0.2.1 \
+gh release edit v0.2.2 \
   --repo JGalbss/cod4-macos \
   --draft=false \
   --latest

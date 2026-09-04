@@ -173,6 +173,17 @@ complete compatibility. Results below were observed during development through
 - A clean launch with `r_fullscreen=1` reported `AXFullScreen=true` through
   macOS accessibility state and reconfigured the renderer to the full-screen
   Space. Evidence is in `/tmp/cod4-fullscreen.9w59qY`.
+- The local 0.2.2/build-4 DMG SHA-256 is
+  `4cd7ddd387d59312ddcd396b130d65ea02de6ee73a8e7fc4da756969ba5e41c4`;
+  its packaged executable SHA-256 is
+  `2b6b6c6b375a16c0f715cb6d36323161519072a9652b67dcd815729ef9fb6aa6`.
+  It passed checksum and disk-image verification, deep code-sign structure,
+  bundled SDL and Sparkle checks, arm64/dependency inspection, and retail-asset
+  exclusion. Two packaged clients then joined the live protocol-21 server,
+  accepted config-client sequence 15, reached active gameplay, and exited with
+  no parser, connection, assertion, or fatal error; evidence is in
+  `/tmp/cod4-packaged-live.NgYSZ6`. The packaged neutral-color/window-surface
+  capture is in `/tmp/cod4-packaged-visual.6GTJb5`.
 
 Progression and automated gameplay tests used isolated `fs_homepath`
 directories so normal user profile data was not read or modified.
