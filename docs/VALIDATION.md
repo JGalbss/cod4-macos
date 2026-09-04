@@ -18,8 +18,16 @@ complete compatibility. Results below were observed during development through
   damage, authoritative death, score update, killcam entry/exit, and full-health
   respawn. A final three-cycle run passed every check with artifacts in
   `/tmp/kisak-native-combat.G0p9Nw`.
-- Search and Destroy and Sabotage tests exercised their plant and defuse paths.
-  This is not a comprehensive certification of every timing or balance setting.
+- The exact installed 0.1.0/build-1 baseline entered active FFA, Team
+  Deathmatch, Domination, Headquarters, Search and Destroy, and Sabotage states
+  on `mp_vacant`. Each mode rendered 3D gameplay, accepted scripted input, and
+  shut down cleanly. This verifies mode startup, not every objective transition.
+- A focused Search and Destroy probe found the authored A/B sites, entered an
+  attacker round, and displayed the real `Hold F to plant` prompt. The requested
+  `scr_sd_planttime=2`, `scr_sd_defusetime=2`, and `scr_sd_bombtimer=5` values
+  were registered exactly. Team-selection races prevented the harness from
+  completing a plant, so plant duration, countdown/explosion, two-client defuse,
+  scoring, and round transition are not claimed as validated.
 - One real kill moved XP from 0 to 10 and persisted through a cold restart in
   the encrypted 8,476-byte `mpdata` file.
 - Controlled additive-XP checks observed XP 100 to 200 with rank 1 to 2, then
@@ -27,6 +35,16 @@ complete compatibility. Results below were observed during development through
 - A level-9 progression test exposed all five Create-a-Class slots, and the
   level/loadout state persisted across restart. This verifies the tested
   Create-a-Class path, not the complete unlock matrix at every rank.
+- Installed-app first-run probes verified explicit, saved, and `$HOME/Games/cod4`
+  data discovery plus presentation of the retail-data chooser when no compatible
+  directory existed. Fresh profiles received one New Experience Favorite;
+  existing valid server caches, including a cache with zero Favorites, remained
+  unchanged.
+- The installed client loaded ModWarfare's IWD, fastfile, and 115 scripts into
+  active `mp_vacant` gameplay. The custom `mp_mw2_rust` load/main zones also
+  reached active 3D gameplay. OpenWarfare2 discovered its five IWDs but did not
+  finish early renderer-zone startup in repeated 35–90 second probes, so it is
+  explicitly unsupported pending focused loader profiling.
 - Renderer/game binary SHA-256 `7f40b89e89f7ded2fa2fddfe88c83875f8f8fc374e51c426402471af1797a563`
   passed all 21 maps in the deterministic matrix for 1,200 frames each with
   seed `20260904`. Artifacts are in `/tmp/kisak-native-fuzz.RKET7T`.
@@ -104,6 +122,8 @@ stapled DMG and an install/update test from the downloaded final bytes.
 - Visual and performance parity across every map, effect, material, and scene
 - Long multiplayer sessions and a broad sample of public servers
 - Every stock game mode, rank boundary, challenge, attachment, perk, and unlock
+- Completed Search and Destroy/Sabotage pickup, plant, defuse, explosion,
+  scoring, and round-transition semantics on the exact release artifact
 - Compatibility with all script, IWD, fastfile, and asset mods
 - Compatibility with Windows-only native mod DLLs
 - Coverage across multiple Apple Silicon generations and all supported macOS

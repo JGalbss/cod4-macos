@@ -22,8 +22,10 @@ through Metal without Wine, DXVK, Vulkan, or MoltenVK.
 
 The release-candidate source passed clean arm64 CI, integrated two-client
 combat cycles, deterministic 21-map fuzz coverage, focused graphics/FX stress,
-and installed-app map-load smoke tests. See `docs/VALIDATION.md` for the exact
-commands, evidence, and limitations.
+six-mode installed-app startup coverage, and installed-app map-load smoke tests.
+Fresh-profile, progression, Create-a-Class, ModWarfare, and custom Rust paths
+also passed focused checks. See `docs/VALIDATION.md` for the exact scope and
+limitations.
 
 ## Requirements and known limitations
 
@@ -31,6 +33,8 @@ commands, evidence, and limitations.
 - A legally owned compatible Call of Duty 4 installation is required.
 - Script, IWD, fastfile, and asset mods use the native `fs_game` paths, but
   broad third-party mod compatibility is not guaranteed.
+- OpenWarfare2 currently stalls during early renderer-zone startup and is not a
+  supported mod for this candidate.
 - Windows-only mod DLLs cannot load in an arm64 macOS process and require a
   native source port.
 - This candidate must not be published until its final DMG is Developer-ID

@@ -13,9 +13,9 @@ independent, unofficial, and not affiliated with the game's publisher.
 
 The tested native path can create a profile, render the multiplayer UI and 3D
 maps, accept keyboard and mouse input, play audio, host or join multiplayer,
-and exercise standard combat, killcam, respawn, bomb-mode, progression, and
-Create-a-Class flows. A fresh profile receives a Favorite named
-**New Experience**; an existing Favorites list is left unchanged.
+exercise standard combat, killcam, respawn, progression, and Create-a-Class
+flows, and launch the stock bomb modes. A fresh profile receives a Favorite
+named **New Experience**; an existing Favorites list is left unchanged.
 
 The current renderer/game arm64 build passed a three-cycle integrated
 two-client combat test and a 21-map, 1,200-frame-per-map deterministic fuzz
