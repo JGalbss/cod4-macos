@@ -27,6 +27,8 @@ No changes are currently queued beyond the 0.2.0 release candidate.
   GitHub-hosted arm64 macOS runner without uploading unsigned binaries.
 - Ad-hoc development packages keep manual update checks but disable scheduled
   polling until a signed public feed exists.
+- Native renderer restarts now apply latched graphics choices. Legacy D3D MSAA
+  and multi-GPU toggles are pinned off instead of presenting nonfunctional values.
 
 ### Fixed
 
@@ -40,6 +42,8 @@ No changes are currently queued beyond the 0.2.0 release candidate.
   transitions rebuild viewport, projection, HUD, menu, console, and mouse geometry.
 - Restored native Video Mode and Screen Refresh Rate enum registration for the
   retail Graphics menu, and made applied windowed modes resize the AppKit window.
+- Made Auto, 4:3, 16:10, and 16:9 aspect selections update the native projection
+  and pixel-aspect configuration after Apply.
 - Removed absolute build-machine runtime paths from packaged applications and
   made DMG installation verify its SHA-256 sidecar before mounting.
 - Normalized compiler source/debug paths and made packaging reject embedded

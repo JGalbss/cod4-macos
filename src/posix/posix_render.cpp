@@ -66,15 +66,16 @@ void __cdecl R_ConfigureRenderer(const GfxConfiguration *config)
 {
     if (!config) return;
 
-    // R_RegisterDvars lives in r_dvars.cpp, which IS built, but its only callers are in
-    // r_init.cpp (R_Init / R_Register), which is not. So every r_* dvar pointer stayed
-    // NULL and the first read faulted: R_AllocStaticVertexBuffer dereferences
-    // r_loadForRenderer->current.enabled on its second instruction, which is why zone
-    // loading died at address 0x18. Register them here, once.
+    // R_RegisterDvars lives in r_dvars.cpp, which IS built, but its normal callers are
+    // in r_init.cpp (R_Init / R_Register), which is not. Register on every native
+    // renderer configuration just as the original restart path does: re-registration
+    // is what promotes Apply-menu values from latched to current before assets reload.
+    R_RegisterDvars();
+
+    // Commands and one-time native defaults must still be installed only once.
     static bool registered = false;
     if (!registered) {
         registered = true;
-        R_RegisterDvars();
         // Same reason: r_cmds.cpp is built but R_RegisterCmds only had callers in
         // r_init.cpp, so "screenshot", "imagelist" and the gfx_* listings did not exist.
         R_RegisterCmds();

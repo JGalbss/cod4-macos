@@ -574,7 +574,17 @@
          1,
          DVAR_NOFLAG,
          "GPU synchronization type (used to improve mouse responsiveness)");
-     r_multiGpu = Dvar_RegisterBool("r_multiGpu", false, DVAR_ARCHIVE, "Use multiple GPUs");
+     r_multiGpu = Dvar_RegisterBool(
+         "r_multiGpu",
+         false,
+#ifdef KISAK_METAL
+         DVAR_ARCHIVE | DVAR_ROM,
+         "Unavailable on the native Apple unified-GPU renderer"
+#else
+         DVAR_ARCHIVE,
+         "Use multiple GPUs"
+#endif
+     );
      r_skinCache = Dvar_RegisterBool("r_skinCache", true, DVAR_NOFLAG, "Enable cache for vertices of animated models");
      r_fastSkin = Dvar_RegisterBool("r_fastSkin", false, DVAR_ARCHIVE, "Enable fast model skinning");
      r_smc_enable = Dvar_RegisterBool("r_smc_enable", true, DVAR_NOFLAG, "Enable static model cache");
@@ -882,9 +892,15 @@
      r_aaSamples = Dvar_RegisterInt(
          "r_aaSamples",
          1,
+#ifdef KISAK_METAL
+         (DvarLimits)0x100000001LL,
+         DVAR_ARCHIVE | DVAR_ROM,
+         "D3D multisample anti-aliasing is unavailable on the native Metal renderer");
+#else
          (DvarLimits)0x1000000001LL,
          DVAR_ARCHIVE | DVAR_LATCH,
          "Anti-aliasing sample count; 1 disables anti-aliasing");
+#endif
      r_vsync = Dvar_RegisterBool(
          "r_vsync",
 #ifdef KISAK_METAL

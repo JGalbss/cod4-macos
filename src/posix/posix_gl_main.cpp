@@ -15,6 +15,7 @@
 // leave the real main thread to Cocoa.
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -289,12 +290,38 @@ void UpdateVideoConfiguration()
     const bool resized = cls.vidConfig.displayWidth != static_cast<uint32_t>(width)
         || cls.vidConfig.displayHeight != static_cast<uint32_t>(height);
     UpdateNativeDisplayDvars(width, height, resized);
-    if (!resized)
-        return;
 
     const bool fullscreen = posix_gl::Window()
         && (SDL_GetWindowFlags(posix_gl::Window()) & SDL_WINDOW_FULLSCREEN) != 0;
-    const float aspect = static_cast<float>(width) / static_cast<float>(height);
+    const auto *const aspectDvar = Dvar_FindVar("r_aspectRatio");
+    const int aspectChoice = aspectDvar ? aspectDvar->current.integer : 0;
+    static int lastAspectChoice = -1;
+    const bool configurationChanged = resized
+        || cls.vidConfig.isFullscreen != (fullscreen ? 1u : 0u)
+        || lastAspectChoice != aspectChoice;
+    if (!configurationChanged)
+        return;
+    lastAspectChoice = aspectChoice;
+
+    const float nativeAspect = static_cast<float>(width) / static_cast<float>(height);
+    float aspect = nativeAspect;
+    switch (aspectChoice)
+    {
+    case 0: // auto: match the original renderer's 4:3 / 16:10 / 16:9 snap.
+        if (static_cast<int>(std::lround(16.0f / nativeAspect)) == 10)
+            aspect = 1.6f;
+        else if (static_cast<int>(std::lround(16.0f / nativeAspect)) > 10)
+            aspect = 4.0f / 3.0f;
+        else
+            aspect = 16.0f / 9.0f;
+        break;
+    case 1: aspect = 4.0f / 3.0f; break;
+    case 2: aspect = 16.0f / 10.0f; break;
+    case 3: aspect = 16.0f / 9.0f; break;
+    default: aspect = nativeAspect; break;
+    }
+    const float scenePixelAspect = static_cast<float>(height) * aspect
+        / static_cast<float>(width);
     const auto apply = [&](vidConfig_t &config) {
         config.sceneWidth = static_cast<uint32_t>(width);
         config.sceneHeight = static_cast<uint32_t>(height);
@@ -303,8 +330,8 @@ void UpdateVideoConfiguration()
         config.displayFrequency = static_cast<uint32_t>(posix_gl::DisplayFrequency());
         config.isFullscreen = fullscreen ? 1 : 0;
         config.aspectRatioWindow = aspect;
-        config.aspectRatioScenePixel = 1.0f;
-        config.aspectRatioDisplayPixel = 1.0f;
+        config.aspectRatioScenePixel = scenePixelAspect;
+        config.aspectRatioDisplayPixel = fullscreen ? scenePixelAspect : 1.0f;
     };
     apply(vidConfig);
     apply(cls.vidConfig);
@@ -321,7 +348,7 @@ void UpdateVideoConfiguration()
     if (com_wideScreen)
         Dvar_SetBool(const_cast<dvar_t *>(com_wideScreen), aspect > 1.4f);
 
-    Com_Printf(8, "[posix] video resized: %dx%d points, aspect %.3f, fullscreen=%d\n",
+    Com_Printf(8, "[posix] video configured: %dx%d points, aspect %.3f, fullscreen=%d\n",
                width, height, aspect, fullscreen ? 1 : 0);
 }
 
