@@ -166,6 +166,14 @@ staged_app="${work_dir}/${bundle_name}"
 if [[ -d "${source_path}" && "${source_path:t}" == "${bundle_name}" ]]; then
     /usr/bin/ditto "${source_path}" "${staged_app}"
 elif [[ -f "${source_path}" && "${source_path:l}" == *.dmg ]]; then
+    checksum_path="${source_path}.sha256"
+    [[ -f "${checksum_path}" ]] || fail "DMG checksum sidecar is missing: ${checksum_path}"
+    expected_checksum="$(/usr/bin/awk 'NR == 1 { print $1 }' "${checksum_path}")"
+    [[ "${expected_checksum}" =~ '^[0-9a-fA-F]{64}$' ]] \
+        || fail 'DMG checksum sidecar is malformed'
+    actual_checksum="$(/usr/bin/shasum -a 256 "${source_path}" | /usr/bin/awk '{ print $1 }')"
+    [[ "${actual_checksum}" == "${expected_checksum:l}" ]] \
+        || fail 'DMG checksum does not match its sidecar'
     /usr/bin/hdiutil verify "${source_path}" >/dev/null || fail 'DMG verification failed'
     if /usr/bin/hdiutil info | /usr/bin/grep -F "${source_path}" >/dev/null; then
         fail 'DMG is already attached; detach its existing volume before installing'

@@ -64,6 +64,12 @@ mkdir -p "${stage_app}/Contents/MacOS" \
          "${stage_app}/Contents/Frameworks"
 "${repo_dir}/mac/updater/stage_sparkle.zsh" "${stage_app}"
 cp "${repo_dir}/mac/Info.plist" "${stage_app}/Contents/Info.plist"
+# Development packages must not poll a production feed that may not exist yet.
+# Manual Check for Updates remains available for deliberate updater testing.
+if [[ "${publish_release}" != 1 ]]; then
+    /usr/libexec/PlistBuddy -c 'Set :SUEnableAutomaticChecks false' \
+        "${stage_app}/Contents/Info.plist"
+fi
 cp "${native_binary}" "${stage_app}/Contents/MacOS/${executable_name}"
 chmod 755 "${stage_app}/Contents/MacOS/${executable_name}"
 
@@ -128,14 +134,16 @@ fi
 # Do not leave the build machine's Homebrew directory ahead of the bundled
 # libraries. dyld searches LC_RPATH entries in load-command order; retaining
 # /opt/homebrew/lib made an otherwise self-contained app silently use whatever
-# SDL/GLM happened to be installed on the launching Mac.
+# SDL/GLM happened to be installed on the launching Mac. CMake can also embed
+# the absolute directory of a downloaded framework, so remove every absolute
+# rpath; packaged dependencies must resolve from the app bundle.
 while IFS= read -r rpath; do
     [[ -n "${rpath}" ]] || continue
     install_name_tool -delete_rpath "${rpath}" "${stage_app}/Contents/MacOS/${executable_name}"
 done < <(otool -l "${stage_app}/Contents/MacOS/${executable_name}" | awk '
     $1 == "cmd" && $2 == "LC_RPATH" { in_rpath = 1; next }
     in_rpath && $1 == "path" {
-        if ($2 ~ /^\/opt\/homebrew\//) print $2
+        if ($2 ~ /^\//) print $2
         in_rpath = 0
     }')
 if ! otool -l "${stage_app}/Contents/MacOS/${executable_name}" | awk '
@@ -153,10 +161,18 @@ fi
 # dependency that the main executable's direct scan did not reveal.
 dependency_leaks="${stage_dir}/dependency-leaks.txt"
 : >"${dependency_leaks}"
-for macho in "${stage_app}/Contents/MacOS/${executable_name}" "${stage_app}"/Contents/Frameworks/*.dylib(N); do
-    otool -L "${macho}" | awk '$1 ~ /^\/opt\/homebrew\// || $1 ~ /^\/usr\/local\// { print }' \
+while IFS= read -r -d '' candidate; do
+    file "${candidate}" | grep -q 'Mach-O' || continue
+    otool -L "${candidate}" | awk \
+        '$1 ~ /^\/Users\// || $1 ~ /^\/opt\/homebrew\// || $1 ~ /^\/usr\/local\// { print }' \
         >>"${dependency_leaks}"
-done
+    otool -l "${candidate}" | awk '
+        $1 == "cmd" && $2 == "LC_RPATH" { in_rpath = 1; next }
+        in_rpath && $1 == "path" {
+            if ($2 ~ /^\/Users\// || $2 ~ /^\/opt\// || $2 ~ /^\/usr\/local\//) print $2
+            in_rpath = 0
+        }' >>"${dependency_leaks}"
+done < <(find "${stage_app}" -type f -print0)
 if [[ -s "${dependency_leaks}" ]]; then
     print -u2 "Package still contains build-machine dependencies:"
     cat "${dependency_leaks}" >&2
@@ -179,6 +195,22 @@ if [[ "${publish_release}" == 1 ]]; then
     fi
     if [[ -z "${source_code_url}" ]]; then
         print -u2 "Publish mode requires SOURCE_CODE_URL for this exact GPLv3 source revision."
+        exit 1
+    fi
+    release_revision="$(git -C "${repo_dir}" rev-parse HEAD 2>/dev/null || true)"
+    if [[ ! "${release_revision}" =~ '^[0-9a-f]{40}$' \
+        || "${source_code_url}" != "https://github.com/JGalbss/cod4-macos/tree/${release_revision}" ]]; then
+        print -u2 "SOURCE_CODE_URL must identify this exact public source commit."
+        exit 1
+    fi
+    if [[ -n "$(git -C "${repo_dir}" status --porcelain --untracked-files=no)" ]]; then
+        print -u2 "Publish mode requires a clean tracked source checkout."
+        exit 1
+    fi
+    if ! command -v gh >/dev/null \
+        || ! gh api "repos/JGalbss/cod4-macos/commits/${release_revision}" \
+            --jq .sha 2>/dev/null | grep -Fxiq "${release_revision}"; then
+        print -u2 "The exact source commit is not reachable in JGalbss/cod4-macos."
         exit 1
     fi
 fi

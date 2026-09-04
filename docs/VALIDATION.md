@@ -16,7 +16,8 @@ complete compatibility. Results below were observed during development through
   remain untouched.
 - The current integrated two-client standard-combat test exercised real bullet
   damage, authoritative death, score update, killcam entry/exit, and full-health
-  respawn. It passed with artifacts in `/tmp/kisak-native-combat.M1gE4r`.
+  respawn. A final three-cycle run passed every check with artifacts in
+  `/tmp/kisak-native-combat.G0p9Nw`.
 - Search and Destroy and Sabotage tests exercised their plant and defuse paths.
   This is not a comprehensive certification of every timing or balance setting.
 - One real kill moved XP from 0 to 10 and persisted through a cold restart in
@@ -26,10 +27,18 @@ complete compatibility. Results below were observed during development through
 - A level-9 progression test exposed all five Create-a-Class slots, and the
   level/loadout state persisted across restart. This verifies the tested
   Create-a-Class path, not the complete unlock matrix at every rank.
-- The current deterministic fuzz run passed five maps for 1,200 frames each:
-  `mp_vacant`, `mp_crash`, `mp_shipment`, `mp_backlot`, and `mp_strike`. Its
-  A second post-package run with seed `20260904` also passed; its final-build
-  artifacts are in `/tmp/kisak-native-fuzz.iEWEx1`.
+- Renderer/game binary SHA-256 `7f40b89e89f7ded2fa2fddfe88c83875f8f8fc374e51c426402471af1797a563`
+  passed all 21 maps in the deterministic matrix for 1,200 frames each with
+  seed `20260904`. Artifacts are in `/tmp/kisak-native-fuzz.RKET7T`.
+- Focused vehicle-explosion captures at early and late effect lifetimes show
+  authored orange fire, smoke, debris, and localized heat distortion without
+  the previous gray cards, colored wedges, or full-screen corruption. Their
+  fatal scans are empty. Evidence is in
+  `/tmp/cod4-final-graphics-stress/final-v2-plus35` and
+  `/tmp/cod4-final-graphics-stress/final-v2-plus130`.
+- A moving/camera graphics stress run had no fatal frames and no sampled frame
+  over 16.7 ms while capped near 120 FPS. Evidence is in
+  `/tmp/cod4-final-graphics-stress/final-motion-stress`.
 - The updater-enabled Release arm64 configuration built successfully. A packaged
   app smoke test launched the final app layout, reported Sparkle enabled, loaded
   `mp_vacant`, joined a team/loadout, and quit normally. Its artifacts are in

@@ -123,6 +123,7 @@ void Initialize()
     NSString *const publicKey = info[@"SUPublicEDKey"];
     const bool signedFeedRequired = [info[@"SURequireSignedFeed"] boolValue];
     const bool verifyBeforeExtraction = [info[@"SUVerifyUpdateBeforeExtraction"] boolValue];
+    const bool automaticChecksEnabled = [info[@"SUEnableAutomaticChecks"] boolValue];
     const bool isApplicationBundle = [bundle.bundleURL.pathExtension.lowercaseString
         isEqualToString:@"app"];
 
@@ -144,7 +145,10 @@ void Initialize()
         userDriverDelegate:nil];
     InstallCheckForUpdatesMenuItem();
 
-    std::fprintf(stdout, "[updater] Sparkle enabled; scheduled and manual checks are available\n");
+    std::fprintf(stdout,
+        automaticChecksEnabled
+            ? "[updater] Sparkle enabled; scheduled and manual checks are available\n"
+            : "[updater] Sparkle enabled; manual checks are available\n");
     std::fflush(stdout);
 }
 

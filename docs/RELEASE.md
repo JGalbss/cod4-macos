@@ -71,6 +71,8 @@ file 'bin/posix/jgalbs cod4'
 With no signing variables, the script produces an ad-hoc-signed development
 bundle. It embeds runtime libraries, removes build-machine Homebrew paths,
 adds license/source notices, creates the DMG, and writes its checksum.
+Development packages keep manual **Check for Updates…** available but disable
+scheduled checks so they do not poll a production feed before one is live.
 The public source export intentionally has no application mark: provide a
 square PNG that you own or are authorized to redistribute. Setting the path
 does not grant rights to the image.
@@ -158,16 +160,21 @@ After the notarized DMG exists:
 ```zsh
 GITHUB_REPOSITORY=JGalbss/cod4-macos \
 RELEASE_TAG=v0.2.0 \
+RELEASE_SOURCE_SHA="${RELEASE_REVISION}" \
 RELEASE_NOTES=/absolute/path/to/release-notes.md \
 mac/updater/prepare_update_release.zsh
 
-mac/updater/publish_github_release.zsh JGalbss/cod4-macos v0.2.0
+RELEASE_SOURCE_SHA="${RELEASE_REVISION}" \
+  mac/updater/publish_github_release.zsh JGalbss/cod4-macos v0.2.0
 ```
 
-The publisher creates or updates a draft and verifies its assets. Leave it as a
-draft until an older, notarized build discovers the signed feed, installs the
-new build, relaunches, preserves external data/profile state, and passes a
-multiplayer join/quit smoke test. Only then promote the draft:
+The publisher creates or updates a draft and verifies its assets. Draft assets
+are not available through GitHub's `releases/latest` endpoint, so the exact
+old-to-new update test must use a separate public staging feed/repository or a
+notarized staging build pointed directly at the candidate appcast. Do not claim
+that a production build discovered a draft through `releases/latest`. After the
+staging update installs, relaunches, preserves external data/profile state, and
+passes a multiplayer join/quit smoke test, promote the draft:
 
 ```zsh
 gh release edit v0.2.0 \
@@ -178,8 +185,6 @@ gh release edit v0.2.0 \
 
 ## Current public-binary blockers
 
-- The renderer/FX visual regression suite must pass without diagnostic code or
-  known screen-sized distortion artifacts.
 - The exact exported source revision must pass public clean-clone arm64 CI
   before that revision is used for packaging.
 - The final DMG must pass multiplayer smoke/regression testing on a clean,

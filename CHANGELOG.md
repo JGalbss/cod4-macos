@@ -12,6 +12,8 @@ The project uses semantic versioning while the port is under active development.
 - Fail-closed Homebrew cask preparation that requires the final DMG to pass
   Developer ID, hardened-runtime, notarization, Gatekeeper, checksum, bundle,
   architecture, and corresponding-source checks.
+- Signed Sparkle feed tooling with exact source/tag/version validation and
+  complete generic, versioned, checksum, and delta asset manifests.
 
 ### Changed
 
@@ -19,11 +21,19 @@ The project uses semantic versioning while the port is under active development.
   Silicon issue, pull-request, and source-safety guidance.
 - CI now audits the sanitized source manifest and builds the Metal client on a
   GitHub-hosted arm64 macOS runner without uploading unsigned binaries.
+- Ad-hoc development packages keep manual update checks but disable scheduled
+  polling until a signed public feed exists.
 
 ### Fixed
 
 - Corrected the IWI diagnostic decoder's format mapping: format `0xC` is BC2
   and format `0xD` is BC3. The tool now accepts BC1, BC2, and BC3 inputs.
+- Resolved late-loaded FX materials against the canonical sorted material table
+  so smoke, debris, fire, and distortion no longer inherit material slot zero.
+- Corrected native Metal FX sampling, depth, alpha-test, culling, and tangent
+  semantics used by explosions and other translucent effects.
+- Removed absolute build-machine runtime paths from packaged applications and
+  made DMG installation verify its SHA-256 sidecar before mounting.
 
 ## 0.1.0 source baseline - 2026-09-04
 

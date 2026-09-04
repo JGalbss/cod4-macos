@@ -17,11 +17,13 @@ and exercise standard combat, killcam, respawn, bomb-mode, progression, and
 Create-a-Class flows. A fresh profile receives a Favorite named
 **New Experience**; an existing Favorites list is left unchanged.
 
-The current updater-enabled Release arm64 build passed the integrated
-two-client combat test, the five-map deterministic fuzz test, and a packaged
-application smoke test. On the profiled Apple Silicon Mac's built-in 120 Hz
-display, the tested scene held approximately 120 FPS; this is a measured result
-for that setup, not a universal frame-rate claim.
+The current renderer/game arm64 build passed a three-cycle integrated
+two-client combat test and a 21-map, 1,200-frame-per-map deterministic fuzz
+test. Focused explosion and moving-camera graphics stress captures completed
+without fatal frames or the earlier colored/gray card corruption. On the
+profiled Apple Silicon Mac's built-in 120 Hz display, the tested scene held
+approximately 120 FPS; this is a measured result for that setup, not a universal
+frame-rate claim.
 
 This is still a development build. Rendering parity, long-session stability,
 performance across Mac models, the full map/mode matrix, and broad mod

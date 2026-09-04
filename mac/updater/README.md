@@ -37,6 +37,8 @@ The updater remains inert unless all of these are true:
 This protects both the executable archive and appcast/release-note metadata.
 The recommended defaults enable automatic discovery while keeping installation
 user-confirmed (`SUEnableAutomaticChecks=true`, `SUAutomaticallyUpdate=false`).
+Local ad-hoc packages override scheduled checks to false so they do not poll a
+feed before the first signed public release; their manual menu item remains.
 
 ## One-time release-owner inputs
 
@@ -149,6 +151,7 @@ can preserve old feed entries and produce binary deltas.
 ```zsh
 GITHUB_REPOSITORY=JGalbss/cod4-macos \
 RELEASE_TAG=v0.2.0 \
+RELEASE_SOURCE_SHA="$(git rev-parse HEAD)" \
 RELEASE_NOTES=/absolute/path/to/notes.md \
 mac/updater/prepare_update_release.zsh
 ```
@@ -165,20 +168,28 @@ the workspace:
 ```zsh
 printf '%s' "${SPARKLE_PRIVATE_KEY_SECRET}" | \
   SPARKLE_ED_KEY_FILE=- GITHUB_REPOSITORY=JGalbss/cod4-macos \
-  RELEASE_TAG=v0.2.0 mac/updater/prepare_update_release.zsh
+  RELEASE_TAG=v0.2.0 RELEASE_SOURCE_SHA="$(git rev-parse HEAD)" \
+  mac/updater/prepare_update_release.zsh
 ```
 
 Create or update a verified **draft** GitHub Release:
 
 ```zsh
-mac/updater/publish_github_release.zsh JGalbss/cod4-macos v0.2.0
+RELEASE_SOURCE_SHA="$(git rev-parse HEAD)" \
+  mac/updater/publish_github_release.zsh JGalbss/cod4-macos v0.2.0
 ```
 
-The script refuses private repositories and non-draft existing releases. It
-uploads every manifest asset while the release is hidden, verifies the remote
-asset list, and prints the explicit command that promotes the draft to latest.
-That final promotion is intentionally separate so a partially uploaded feed is
-never exposed at `releases/latest/download/appcast.xml`.
+The script refuses private repositories, non-draft existing releases, and any
+DMG that fails Developer ID, notarization, stapling, or Gatekeeper checks. It
+uploads the generic Homebrew DMG, versioned update archive, generated deltas,
+checksums, and signed appcast while the release is hidden, then verifies the
+remote asset list. Final promotion is intentionally separate so a partially
+uploaded feed is never exposed at `releases/latest/download/appcast.xml`.
+
+GitHub draft assets are not available through `releases/latest`. Exercise the
+candidate with a separate public staging feed/repository or a notarized staging
+build pointed directly at the candidate appcast; never report a draft as having
+passed production-feed discovery.
 
 ## End-to-end release test
 
