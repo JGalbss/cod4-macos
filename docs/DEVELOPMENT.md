@@ -6,17 +6,17 @@ target remains `kisak_posix`; its packaged product and executable name are
 
 ## Prerequisites
 
-Use an Apple Silicon Mac with macOS 15.5 or newer and install Xcode Command
-Line Tools. The currently exercised dependency set is CMake, Ninja, Premake 5,
-SDL2 compatibility headers, and GLM:
+Use an Apple Silicon Mac with macOS 15.5 or newer, the Xcode Command Line
+Tools, and Homebrew. The complete build can be run from the repository root:
 
 ```zsh
-xcode-select --install
-brew install cmake ninja premake sdl2-compat glm
+./mac/build.zsh
 ```
 
 You also need a legally owned Call of Duty 4 data directory. Retail files are
 runtime inputs and must stay outside this repository.
+
+The remaining sections document the individual build steps.
 
 ## Build the pinned fastfile dependency
 

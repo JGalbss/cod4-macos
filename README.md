@@ -1,100 +1,50 @@
 # jgalbs cod4
 
-`jgalbs cod4` is an in-progress, native Apple Silicon port of the KisakCOD
-multiplayer client. It runs as an arm64 macOS application and presents through
-Metal directly—there is no Wine, DXVK, Vulkan, or MoltenVK layer in the native
-build.
+`jgalbs cod4` is an open-source Apple Silicon port of the
+[KisakCOD](https://github.com/SwagSoftware/KisakCOD) multiplayer client for
+macOS, featuring a native Metal renderer.
 
-The public source repository is
-[`JGalbss/cod4-macos`](https://github.com/JGalbss/cod4-macos). This project is
-independent, unofficial, and not affiliated with the game's publisher.
+## Related repositories
+
+| Repository | Purpose |
+| --- | --- |
+| [`cod4-macos`](https://github.com/JGalbss/cod4-macos) | Client source, macOS build, and renderer |
+| [`homebrew-cod4-macos`](https://github.com/JGalbss/homebrew-cod4-macos) | Homebrew installation metadata for released builds |
+| [`OpenAssetTools`](https://github.com/JGalbss/OpenAssetTools) | Asset tooling used by the client to load game data |
 
 ## Current status
 
-The tested native path can create a profile, render the multiplayer UI and 3D
-maps, accept keyboard and mouse input, play audio, host or join multiplayer,
-exercise standard combat, killcam, respawn, progression, and Create-a-Class
-flows, and launch the stock bomb modes. A fresh profile receives a Favorite
-named **New Experience**; an existing Favorites list is left unchanged.
+The client supports profiles, multiplayer menus and maps, keyboard and mouse
+input, audio, hosting, and joining matches. Core gameplay includes combat,
+killcams, respawning, progression, Create-a-Class, and the stock bomb modes.
 
-The current renderer/game arm64 build passed a three-cycle integrated
-two-client combat test and a 21-map, 1,200-frame-per-map deterministic fuzz
-test. Focused explosion and moving-camera graphics stress captures completed
-without fatal frames or the earlier colored/gray card corruption. On the
-profiled Apple Silicon Mac's built-in 120 Hz display, the tested scene held
-approximately 120 FPS; this is a measured result for that setup, not a universal
-frame-rate claim.
+Development is ongoing. See [Validation](docs/VALIDATION.md) for tested features
+and known limitations.
 
-This is still a development build. Rendering parity, long-session stability,
-performance across Mac models, the full map/mode matrix, and broad mod
-compatibility have not been established. A Windows-only mod DLL cannot load
-inside an arm64 macOS process. See [validation status](docs/VALIDATION.md) for
-the exact tested scope.
+## Game data
 
-## Game data is not included
+Game assets are not included. Point the client to the data directory of a
+compatible Call of Duty 4 installation.
 
-This repository and its application bundle do not contain Call of Duty 4 maps,
-fastfiles, IWDs, textures, sounds, videos, or other retail data. You must own a
-compatible Call of Duty 4 installation and point the client at its data
-directory. Do not add retail data to issues, forks, source archives, or release
-artifacts.
+## Build
 
-## Build on Apple Silicon
-
-Requirements:
-
-- Apple Silicon Mac running macOS 15.5 or newer
-- Xcode Command Line Tools
-- CMake, Ninja, Premake 5, SDL2 compatibility headers, and GLM
-- The exact public OpenAssetTools revision used by the native fastfile bridge
-- Pinned package runtimes built as described in the
-  [SDL runtime guide](mac/sdl2/README.md)
-
-Install the Homebrew prerequisites:
+Building requires an Apple Silicon Mac with macOS 15.5 or later, the Xcode
+Command Line Tools, and [Homebrew](https://brew.sh). From the repository root,
+run:
 
 ```zsh
-brew install cmake ninja premake sdl2-compat glm
+./mac/build.zsh
 ```
 
-Clone and build OpenAssetTools at the pinned public revision:
+The script installs the build dependencies, downloads the pinned
+OpenAssetTools source, and builds the client. The executable is written to
+`bin/posix/jgalbs cod4`. See [Development](docs/DEVELOPMENT.md) for data setup,
+debugging, and testing.
 
-```zsh
-git clone --recurse-submodules https://github.com/JGalbss/OpenAssetTools.git ../OpenAssetTools
-git -C ../OpenAssetTools checkout --detach 0ad64096aa6ee2874f835fff8a5c6dc4af8c7f77
-git -C ../OpenAssetTools submodule update --init --recursive
-../OpenAssetTools/mac-build.sh
-```
+## Releases
 
-Configure and build the CMake target `kisak_posix`. The produced executable is
-`bin/posix/jgalbs cod4`.
-
-```zsh
-cmake -S . -B build-metal -G Ninja \
-  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-  -DCMAKE_OSX_ARCHITECTURES=arm64 \
-  -DCMAKE_OSX_DEPLOYMENT_TARGET=15.5 \
-  -DKISAK_TARGET=posix \
-  -DKISAK_METAL=ON \
-  -DOAT_ROOT="$(cd ../OpenAssetTools && pwd)"
-cmake --build build-metal --target kisak_posix -j4
-```
-
-For data setup, direct execution, debugging, and test commands, continue with
-[Development](docs/DEVELOPMENT.md).
-
-## Packaging and releases
-
-The packaged application name is exactly `jgalbs cod4`. Local ad-hoc packages
-can be built for development, but no public binary should be treated as a
-release until it is signed with Developer ID, notarized by Apple, stapled,
-tested from the final DMG, and paired with the exact public GPL corresponding
-source. Remaining public-release gates include renderer/FX visual acceptance,
-a green clean-clone build for the exact public source revision, final-DMG
-multiplayer testing on a clean supported Mac, credentialed Developer ID and
-notarization validation, and a production old-to-new Sparkle update test.
-
-See [Release](docs/RELEASE.md) for packaging, signing, notarization, and Sparkle
-update steps.
+See the [release guide](docs/RELEASE.md) for packaging, code signing,
+notarization, and updates.
 
 ## License and attribution
 
