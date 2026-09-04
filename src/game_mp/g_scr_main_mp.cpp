@@ -4584,6 +4584,111 @@ void Scr_VisionSetNight()
     Scr_Error("USAGE: VisionSetNight( <visionset name>, <transition time> )\n");
 }
 
+static bool Scr_AddMapAuthoredSoldierTypeFallback(
+    const char *filename,
+    int comparisonColumn,
+    const char *comparisonValue,
+    int returnValueColumn)
+{
+    if (I_stricmp(filename, "mp/mapsTable.csv") || comparisonColumn != 0
+        || (returnValueColumn != 1 && returnValueColumn != 2)
+        || I_stricmp(comparisonValue, Dvar_GetString("mapname")))
+    {
+        return false;
+    }
+
+    // Stock maps obtain these values from mapsTable.csv. Custom maps are not
+    // listed there, but their level script can author the same values before
+    // _teams.gsc performs this lookup. Preserve that declared asset set rather
+    // than replacing it with the desert fallback.
+    const char *fieldName = returnValueColumn == 1
+        ? "allies_soldiertype"
+        : "axis_soldiertype";
+    const unsigned int fieldNameId = SL_FindString(fieldName);
+    if (!fieldNameId || !scrVarPub.gameId)
+        return false;
+
+    VariableValue authoredValue{};
+    authoredValue.type = VAR_UNDEFINED;
+    if (fieldNameId && scrVarPub.gameId)
+        authoredValue = Scr_FindVariableField(scrVarPub.gameId, fieldNameId);
+    const bool hasRuntimeValue = authoredValue.type == VAR_STRING
+        && authoredValue.u.stringValue
+        && *SL_ConvertToString(authoredValue.u.stringValue);
+    if (hasRuntimeValue)
+        Scr_AddConstString(authoredValue.u.stringValue);
+    RemoveRefToValue(&authoredValue);
+    if (hasRuntimeValue)
+        return true;
+
+    // The retail script performs this lookup before a custom level's main()
+    // has populated game[].  Read the same declaration from the already-loaded
+    // level source, accepting only the three character sets understood by
+    // _teams.gsc.  This keeps the compatibility path data-driven per map.
+    char rawfileName[128];
+    Com_sprintf(rawfileName, sizeof(rawfileName), "maps/mp/%s.gsc", comparisonValue);
+    RawFile *rawfile = DB_FindXAssetHeader(ASSET_TYPE_RAWFILE, rawfileName).rawfile;
+    if (!rawfile || !rawfile->buffer || rawfile->len <= 0)
+        return false;
+
+    char declaration[64];
+    Com_sprintf(declaration, sizeof(declaration), "\"%s\"", fieldName);
+    const char *cursor = rawfile->buffer;
+    const char *const sourceEnd = cursor + rawfile->len;
+    const size_t declarationLength = strlen(declaration);
+    while (cursor + declarationLength < sourceEnd)
+    {
+        const char *match = nullptr;
+        for (const char *candidate = cursor;
+             candidate + declarationLength <= sourceEnd; ++candidate)
+        {
+            if (!memcmp(candidate, declaration, declarationLength))
+            {
+                match = candidate;
+                break;
+            }
+        }
+        if (!match || match + declarationLength >= sourceEnd)
+            break;
+        const char *lineEnd = static_cast<const char *>(
+            memchr(match, '\n', static_cast<size_t>(sourceEnd - match)));
+        if (!lineEnd)
+            lineEnd = sourceEnd;
+        const char *equals = static_cast<const char *>(
+            memchr(match + declarationLength, '=',
+                   static_cast<size_t>(lineEnd - match - declarationLength)));
+        if (equals)
+        {
+            const char *quote = static_cast<const char *>(
+                memchr(equals + 1, '"', static_cast<size_t>(lineEnd - equals - 1)));
+            if (quote)
+            {
+                const char *value = quote + 1;
+                const char *closingQuote = static_cast<const char *>(
+                    memchr(value, '"', static_cast<size_t>(lineEnd - value)));
+                const size_t valueLength = closingQuote
+                    ? static_cast<size_t>(closingQuote - value) : 0;
+                const char *soldierType = nullptr;
+                if (valueLength == 5 && !I_strnicmp(value, "urban", 5))
+                    soldierType = "urban";
+                else if (valueLength == 6 && !I_strnicmp(value, "desert", 6))
+                    soldierType = "desert";
+                else if (valueLength == 8 && !I_strnicmp(value, "woodland", 8))
+                    soldierType = "woodland";
+                if (soldierType)
+                {
+                    Scr_AddString(soldierType);
+                    Com_Printf(16, "Custom map %s uses %s=%s\n",
+                               comparisonValue, fieldName, soldierType);
+                    return true;
+                }
+            }
+        }
+        cursor = match + declarationLength;
+    }
+    return false;
+}
+
 void Scr_TableLookup()
 {
     const char *stringValue; // [esp+4h] [ebp-18h]
@@ -4607,7 +4712,12 @@ void Scr_TableLookup()
         stringValue = Scr_GetString(2);
         returnValueColumn = Scr_GetInt(3);
         returnValue = (char *)StringTable_Lookup(table, comparisonColumn, stringValue, returnValueColumn);
-        Scr_AddString(returnValue);
+        if (*returnValue
+            || !Scr_AddMapAuthoredSoldierTypeFallback(
+                filename, comparisonColumn, stringValue, returnValueColumn))
+        {
+            Scr_AddString(returnValue);
+        }
     }
     else
     {

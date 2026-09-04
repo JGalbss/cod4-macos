@@ -5,6 +5,10 @@ The project uses semantic versioning while the port is under active development.
 
 ## Unreleased
 
+No user-facing changes yet.
+
+## 0.2.1 release candidate - 2026-09-04
+
 ### Changed
 
 - Existing profiles now receive the jgalbs default Favorite without
@@ -14,12 +18,18 @@ The project uses semantic versioning while the port is under active development.
   progress and repaints the map loading screen while synchronous work runs.
 - Native app icons use a transparent macOS-style rounded tile instead of a
   square black image in the Dock.
+- Normal Metal gameplay keeps a clean full-color base grade across the
+  countdown-to-match transition while preserving authored scripted effects.
 
 ### Fixed
 
 - Hardened active arm64 code against dozens of Win32-size allocations, copies,
   pointer strides, pointer comparisons, and delayed-render-command truncations
   across scripts, UI, assets, snapshots, FX, sound, physics, and rendering.
+- Restored Metal film, glow, depth-of-field, night vision, flipped HUD art,
+  custom-map loading images, protocol-21 map downloads, and protocol-6 joins.
+- Fixed an arm64 cross-array rename calculation that prevented a verified
+  downloaded map from being installed atomically.
 
 ## 0.2.0 release candidate - 2026-09-04
 

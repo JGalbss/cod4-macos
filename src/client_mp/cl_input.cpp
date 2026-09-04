@@ -795,6 +795,7 @@ void __cdecl CL_CmdButtons(int localClientNum, usercmd_s *cmd)
     CL_UpdateCmdButton(localClientNum, &cmd->buttons, 24, 256);
     CL_UpdateCmdButton(localClientNum, &cmd->buttons, 25, 512);
     CL_UpdateCmdButton(localClientNum, &cmd->buttons, 10, 1024);
+    CL_UpdateCmdButton(localClientNum, &cmd->buttons, 28, 0x40000);
     CL_UpdateCmdButton(localClientNum, &cmd->buttons, 26, 0x80000);
 
     Key_IsCatcherActive(localClientNum, -1);
@@ -952,6 +953,16 @@ void __cdecl IN_TalkUp()
     IN_KeyUp(&playersKb[0][29]);
 }
 
+void __cdecl IN_NightVisionDown()
+{
+    IN_KeyDown(&playersKb[0][28]);
+}
+
+void __cdecl IN_NightVisionUp()
+{
+    IN_KeyUp(&playersKb[0][28]);
+}
+
 cmd_function_s IN_CenterView_VAR;
 cmd_function_s IN_UpDown_VAR;
 cmd_function_s IN_UpUp_VAR;
@@ -1027,6 +1038,8 @@ cmd_function_s IN_TalkDown_VAR;
 cmd_function_s IN_TalkUp_VAR;
 cmd_function_s IN_SprintDown_VAR;
 cmd_function_s IN_SprintUp_VAR;
+cmd_function_s IN_NightVisionDown_VAR;
+cmd_function_s IN_NightVisionUp_VAR;
 
 void __cdecl CL_InitInput()
 {
@@ -1107,6 +1120,8 @@ void __cdecl CL_InitInput()
     Cmd_AddCommandInternal("-talk", IN_TalkUp, &IN_TalkUp_VAR);
     Cmd_AddCommandInternal("+sprint", IN_SprintDown, &IN_SprintDown_VAR);
     Cmd_AddCommandInternal("-sprint", IN_SprintUp, &IN_SprintUp_VAR);
+    Cmd_AddCommandInternal("+nightvision", IN_NightVisionDown, &IN_NightVisionDown_VAR);
+    Cmd_AddCommandInternal("-nightvision", IN_NightVisionUp, &IN_NightVisionUp_VAR);
     min.value.max = 1.0f;
     min.value.min = 0.000099999997f;
     cl_analog_attack_threshold = Dvar_RegisterFloat(
@@ -1777,6 +1792,8 @@ void __cdecl CL_ShutdownInput()
     Cmd_RemoveCommand("-sprint");
     Cmd_RemoveCommand("+talk");
     Cmd_RemoveCommand("-talk");
+    Cmd_RemoveCommand("+nightvision");
+    Cmd_RemoveCommand("-nightvision");
 }
 
 void __cdecl CL_ClearKeys(int localClientNum)

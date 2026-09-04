@@ -8,6 +8,7 @@
 #include <client_mp/client_mp.h>
 #include <qcommon/cmd.h>
 #include <qcommon/qcommon.h>
+#include <universal/com_files.h>
 #include <win32/win_storage.h>
 
 #include <tomcrypt.h>
@@ -22,6 +23,7 @@
 #include <cstring>
 #include <iterator>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <arpa/inet.h>
@@ -46,6 +48,46 @@ const dvar_t *cod4xVersion;
 bool extendedProtocol;
 bool passwordFileApplied;
 int serverConfigDataSequence;
+int connectionProtocol = 1;
+std::unordered_map<uint64_t, int> advertisedServerProtocols;
+
+constexpr int kDownloadNameSize = 64;
+constexpr int kDownloadChecksumCount = 256;
+constexpr int kDownloadChecksumWireSize =
+    kDownloadNameSize + sizeof(int32_t) * (2 + kDownloadChecksumCount);
+constexpr int kDownloadRequestSize = 2 * 1024 * 1024;
+constexpr int kMaxDownloadSize = kDownloadChecksumCount * kDownloadRequestSize;
+constexpr int kMaxDownloadBlockSize = 0xffff;
+constexpr int kDownloadClientCommand = 5;
+static_assert(kDownloadChecksumWireSize == 1096);
+
+enum DownloadServerCommand
+{
+    DLSUBCMD_SERVERDL = 0,
+    DLSUBCMD_FILEINIT = 1,
+    DLSUBCMD_WWWRD = 2,
+    DLSUBCMD_FAIL = 3,
+};
+
+enum DownloadClientCommand
+{
+    CLC_BEGINDOWNLOAD = 0,
+    CLC_DONEDOWNLOAD = 1,
+    CLC_STOPDOWNLOAD = 2,
+    CLC_REQUESTDLBLOCKS = 3,
+    CLC_WWWDLFAIL = 4,
+};
+
+struct DownloadState
+{
+    bool initialized;
+    int requestedEnd;
+    uint32_t expectedChecksum;
+    uint32_t checksum;
+    char requestedName[kDownloadNameSize];
+};
+
+DownloadState downloadState;
 
 // This is the same anonymous fallback used by the public CoD4x client when
 // its legacy CD-key authorization path cannot supply a GUID.  A persistent
@@ -55,6 +97,399 @@ constexpr const char *kAnonymousGuid = "01234567890abcdef01234567890abcdef";
 
 char installationGuid[33];
 bool installationGuidInitialized;
+
+uint64_t ServerAddressKey(const netadr_t &address)
+{
+    uint64_t key = static_cast<uint64_t>(static_cast<unsigned int>(address.type)) << 48;
+    key |= static_cast<uint64_t>(address.port) << 32;
+    key |= static_cast<uint64_t>(address.ip[0]);
+    key |= static_cast<uint64_t>(address.ip[1]) << 8;
+    key |= static_cast<uint64_t>(address.ip[2]) << 16;
+    key |= static_cast<uint64_t>(address.ip[3]) << 24;
+    return key;
+}
+
+bool MessageHasBytes(const msg_t *msg, const int count)
+{
+    return msg && count >= 0 && msg->readcount >= 0 && msg->readcount <= msg->cursize
+        && count <= msg->cursize - msg->readcount;
+}
+
+uint32_t ReadLittleU32(const unsigned char *data)
+{
+    return static_cast<uint32_t>(data[0])
+        | (static_cast<uint32_t>(data[1]) << 8)
+        | (static_cast<uint32_t>(data[2]) << 16)
+        | (static_cast<uint32_t>(data[3]) << 24);
+}
+
+bool ReadCString(msg_t *msg, char *output, const size_t outputSize)
+{
+    if (!output || outputSize < 2)
+        return false;
+
+    for (size_t i = 0; i + 1 < outputSize; ++i)
+    {
+        if (!MessageHasBytes(msg, 1))
+            return false;
+        const int character = MSG_ReadByte(msg);
+        if (!character)
+        {
+            output[i] = '\0';
+            return true;
+        }
+        output[i] = static_cast<char>(character);
+    }
+    output[outputSize - 1] = '\0';
+    return false;
+}
+
+bool HasDownloadExtension(const char *path)
+{
+    const char *extension = std::strrchr(path, '.');
+    return extension && (!I_stricmp(extension, ".iwd") || !I_stricmp(extension, ".ff"));
+}
+
+bool IsSafeDownloadPath(const char *path)
+{
+    if (!path || !*path || std::strlen(path) >= kDownloadNameSize
+        || path[0] == '/' || path[0] == '\\' || !HasDownloadExtension(path))
+    {
+        return false;
+    }
+
+    const char *component = path;
+    for (const unsigned char *cursor = reinterpret_cast<const unsigned char *>(path); ; ++cursor)
+    {
+        const unsigned char character = *cursor;
+        if (character
+            && (character == '\\' || character == ':' || character < 0x20 || character == 0x7f))
+            return false;
+        const bool asciiAlphaNumeric = (character >= '0' && character <= '9')
+            || (character >= 'A' && character <= 'Z')
+            || (character >= 'a' && character <= 'z');
+        if (character && character != '/' && !asciiAlphaNumeric
+            && character != '_' && character != '-' && character != '.')
+        {
+            return false;
+        }
+        if (!character || character == '/')
+        {
+            const size_t componentLength = reinterpret_cast<const char *>(cursor) - component;
+            if (!componentLength
+                || (componentLength == 1 && component[0] == '.')
+                || (componentLength == 2 && component[0] == '.' && component[1] == '.'))
+            {
+                return false;
+            }
+            if (!character)
+                break;
+            component = reinterpret_cast<const char *>(cursor) + 1;
+        }
+    }
+    return true;
+}
+
+uint32_t UpdateCrc32(uint32_t previous, const unsigned char *data, size_t length)
+{
+    uint32_t crc = ~previous;
+    while (length--)
+    {
+        crc ^= *data++;
+        for (int bit = 0; bit < 8; ++bit)
+            crc = (crc >> 1) ^ (0xedb88320u & (0u - (crc & 1u)));
+    }
+    return ~crc;
+}
+
+bool SendDownloadCommand(
+    const DownloadClientCommand command,
+    const char *name = nullptr,
+    const int offset = 0,
+    const int size = 0)
+{
+    std::array<unsigned char, 128> commandData{};
+    msg_t commandMessage{};
+    MSG_Init(&commandMessage, commandData.data(), static_cast<int>(commandData.size()));
+    MSG_WriteLong(&commandMessage, 0);
+    MSG_WriteLong(&commandMessage, kDownloadClientCommand);
+    MSG_WriteByte(&commandMessage, command);
+    if (command == CLC_BEGINDOWNLOAD)
+        MSG_WriteString(&commandMessage, name);
+    else if (command == CLC_REQUESTDLBLOCKS)
+    {
+        MSG_WriteLong(&commandMessage, offset);
+        MSG_WriteLong(&commandMessage, size);
+    }
+    return !commandMessage.overflowed && Cod4x_ReliableSendMessage(&commandMessage);
+}
+
+void CloseDownloadFile()
+{
+    if (cls.download)
+    {
+        FS_FCloseFile(cls.download);
+        cls.download = 0;
+    }
+}
+
+void StopMalformedDownload(const char *reason)
+{
+    CloseDownloadFile();
+    downloadState = {};
+    SendDownloadCommand(CLC_STOPDOWNLOAD);
+    Com_Error(ERR_DROP, "CoD4x: malformed download: %s", reason);
+}
+
+bool RequestNextDownloadRange()
+{
+    const int remaining = cls.downloadSize - cls.downloadCount;
+    if (remaining <= 0)
+        return false;
+    const int requestSize = std::min(remaining, kDownloadRequestSize);
+    downloadState.requestedEnd = cls.downloadCount + requestSize;
+    return SendDownloadCommand(
+        CLC_REQUESTDLBLOCKS, nullptr, cls.downloadCount, requestSize);
+}
+
+void FinishDownload()
+{
+    CloseDownloadFile();
+    if (downloadState.checksum != downloadState.expectedChecksum)
+    {
+        const uint32_t actualChecksum = downloadState.checksum;
+        const uint32_t expectedChecksum = downloadState.expectedChecksum;
+        downloadState = {};
+        SendDownloadCommand(CLC_STOPDOWNLOAD);
+        Com_Error(ERR_DROP,
+            "CoD4x: checksum mismatch for %s (expected %08x, got %08x)",
+            cls.downloadName, expectedChecksum, actualChecksum);
+        return;
+    }
+
+    FS_SV_Rename(cls.downloadTempName, cls.downloadName);
+    if (!FS_SV_FileExists(cls.downloadName))
+    {
+        downloadState = {};
+        SendDownloadCommand(CLC_STOPDOWNLOAD);
+        Com_Error(ERR_DROP, "CoD4x: could not install downloaded file %s", cls.downloadName);
+        return;
+    }
+
+    Com_Printf(14, "CoD4x: downloaded %s (%d bytes, checksum %08x)\n",
+        cls.downloadName, cls.downloadCount, downloadState.checksum);
+    downloadState = {};
+    cls.downloadName[0] = 0;
+    cls.downloadTempName[0] = 0;
+    legacyHacks.cl_downloadName[0] = 0;
+    CL_NextDownload(NS_CLIENT1);
+}
+
+void ParseDownloadFileInit(msg_t *msg)
+{
+    if (!MessageHasBytes(msg, 4 + 4 + kDownloadChecksumWireSize))
+    {
+        StopMalformedDownload("truncated file-init message");
+        return;
+    }
+
+    const int fileSize = MSG_ReadLong(msg);
+    MSG_ReadLong(msg); // reserved checksum-info field in protocol 21
+    if (fileSize <= 0 || fileSize > kMaxDownloadSize)
+    {
+        StopMalformedDownload("invalid file size");
+        return;
+    }
+    if (msg->cursize - msg->readcount != kDownloadChecksumWireSize)
+    {
+        StopMalformedDownload("invalid checksum-info size");
+        return;
+    }
+
+    std::array<unsigned char, kDownloadChecksumWireSize> checksumInfo{};
+    MSG_ReadData(msg, checksumInfo.data(), static_cast<int>(checksumInfo.size()));
+    const char *serverName = reinterpret_cast<const char *>(checksumInfo.data());
+    if (!std::memchr(serverName, '\0', kDownloadNameSize) || !IsSafeDownloadPath(serverName))
+    {
+        StopMalformedDownload("invalid server file name");
+        return;
+    }
+    const int checksumFileSize = static_cast<int>(ReadLittleU32(
+        checksumInfo.data() + kDownloadNameSize));
+    const uint32_t expectedChecksum = ReadLittleU32(
+        checksumInfo.data() + kDownloadNameSize + sizeof(int32_t) * (1 + kDownloadChecksumCount));
+    if (checksumFileSize != fileSize
+        || std::strcmp(serverName, downloadState.requestedName)
+        || !downloadState.requestedName[0]
+        || !cls.downloadTempName[0])
+    {
+        StopMalformedDownload("file-init does not match the requested file");
+        return;
+    }
+    if (downloadState.initialized || cls.download)
+    {
+        StopMalformedDownload("file-init while another download is active");
+        return;
+    }
+
+    cls.downloadSize = fileSize;
+    cls.downloadCount = 0;
+    legacyHacks.cl_downloadSize = fileSize;
+    legacyHacks.cl_downloadCount = 0;
+    downloadState.initialized = true;
+    downloadState.expectedChecksum = expectedChecksum;
+    downloadState.checksum = 0;
+    cls.download = FS_SV_FOpenFileWrite(cls.downloadTempName);
+    if (!cls.download)
+    {
+        downloadState = {};
+        SendDownloadCommand(CLC_STOPDOWNLOAD);
+        Com_Error(ERR_DROP, "CoD4x: could not create download file %s", cls.downloadTempName);
+        return;
+    }
+    if (!RequestNextDownloadRange())
+    {
+        StopMalformedDownload("could not queue the first download range");
+        return;
+    }
+}
+
+void ParseDownloadServerBlock(msg_t *msg)
+{
+    if (!downloadState.initialized || !cls.download)
+    {
+        StopMalformedDownload("data block without an active download");
+        return;
+    }
+    if (!MessageHasBytes(msg, 6))
+    {
+        StopMalformedDownload("truncated data-block header");
+        return;
+    }
+
+    const int fileOffset = MSG_ReadLong(msg);
+    const int blockSize = static_cast<uint16_t>(MSG_ReadShort(msg));
+    if (fileOffset != cls.downloadCount)
+    {
+        StopMalformedDownload("unexpected data-block offset");
+        return;
+    }
+    if (msg->cursize - msg->readcount != blockSize
+        || blockSize > cls.downloadSize - cls.downloadCount
+        || blockSize > downloadState.requestedEnd - cls.downloadCount)
+    {
+        StopMalformedDownload("invalid data-block size");
+        return;
+    }
+
+    if (!blockSize)
+    {
+        if (cls.downloadCount != downloadState.requestedEnd)
+        {
+            StopMalformedDownload("range ended before all requested bytes arrived");
+            return;
+        }
+        if (cls.downloadCount == cls.downloadSize)
+        {
+            FinishDownload();
+            return;
+        }
+        if (!RequestNextDownloadRange())
+        {
+            StopMalformedDownload("could not queue the next download range");
+            return;
+        }
+        return;
+    }
+
+    std::array<unsigned char, kMaxDownloadBlockSize> block{};
+    MSG_ReadData(msg, block.data(), blockSize);
+    if (FS_Write(reinterpret_cast<const char *>(block.data()), blockSize, cls.download)
+        != static_cast<unsigned int>(blockSize))
+    {
+        StopMalformedDownload("short file write");
+        return;
+    }
+    downloadState.checksum = UpdateCrc32(downloadState.checksum, block.data(), blockSize);
+    cls.downloadCount += blockSize;
+    legacyHacks.cl_downloadCount = cls.downloadCount;
+}
+
+void ParseDownloadRedirect(msg_t *msg)
+{
+    char url[1024];
+    if (!ReadCString(msg, url, sizeof(url)) || !MessageHasBytes(msg, 8))
+    {
+        StopMalformedDownload("truncated redirect message");
+        return;
+    }
+    const int fileSize = MSG_ReadLong(msg);
+    const int disconnect = MSG_ReadLong(msg);
+    if (msg->readcount != msg->cursize || !url[0]
+        || fileSize <= 0 || fileSize > kMaxDownloadSize
+        || !downloadState.initialized || fileSize != cls.downloadSize
+        || (disconnect != 0 && disconnect != 1))
+    {
+        StopMalformedDownload("invalid redirect message");
+        return;
+    }
+
+    // The stock asynchronous HTTP path reports completion with textual IW3
+    // commands.  Ask a protocol-21 server to use its direct, checksummed path
+    // instead until that path has binary completion reporting end to end.
+    CloseDownloadFile();
+    downloadState.initialized = false;
+    downloadState.requestedEnd = 0;
+    cls.downloadCount = 0;
+    legacyHacks.cl_downloadCount = 0;
+    if (!SendDownloadCommand(CLC_WWWDLFAIL))
+    {
+        downloadState = {};
+        Com_Error(ERR_DROP, "CoD4x: could not decline HTTP download redirect");
+        return;
+    }
+    Com_Printf(14, "CoD4x: declined HTTP redirect; requesting checksummed server download\n");
+}
+
+void ParseDownloadFailure(msg_t *msg)
+{
+    char error[1024];
+    if (!ReadCString(msg, error, sizeof(error)) || msg->readcount != msg->cursize)
+    {
+        StopMalformedDownload("invalid failure message");
+        return;
+    }
+    CloseDownloadFile();
+    downloadState = {};
+    Com_Error(ERR_DROP, "%s", error[0] ? error : "Server refused the download");
+}
+
+void ParseDownloadMessage(msg_t *msg)
+{
+    if (!MessageHasBytes(msg, 1))
+    {
+        StopMalformedDownload("missing subcommand");
+        return;
+    }
+    switch (MSG_ReadByte(msg))
+    {
+    case DLSUBCMD_FILEINIT:
+        ParseDownloadFileInit(msg);
+        break;
+    case DLSUBCMD_SERVERDL:
+        ParseDownloadServerBlock(msg);
+        break;
+    case DLSUBCMD_WWWRD:
+        ParseDownloadRedirect(msg);
+        break;
+    case DLSUBCMD_FAIL:
+        ParseDownloadFailure(msg);
+        break;
+    default:
+        StopMalformedDownload("unknown subcommand");
+        break;
+    }
+}
 
 uint32_t RotateLeft(const uint32_t value, const unsigned int amount)
 {
@@ -468,14 +903,60 @@ void Cod4x_OnChallengeResponse()
         && !I_stricmp(Cmd_Argv(4), "xproto");
 
     if (extendedProtocol)
+    {
+        connectionProtocol = KISAK_COD4X_PROTOCOL_VERSION;
         Com_Printf(14, "CoD4x: server selected extended protocol %d (xproto %s)\n",
             KISAK_COD4X_PROTOCOL_VERSION,
             Cmd_Argc() > 5 ? Cmd_Argv(5) : "unknown");
+    }
+    else
+    {
+        // An ordinary challenge preserves protocol 6 only when the selected
+        // browser row advertised it. Native loopback/listen connections use 1.
+        if (connectionProtocol != 6)
+            connectionProtocol = 1;
+        Com_Printf(14, "CoD4x: server selected legacy protocol %d\n", connectionProtocol);
+    }
 }
 
 bool Cod4x_UseExtendedProtocol()
 {
     return extendedProtocol;
+}
+
+void Cod4x_RememberServerProtocol(const netadr_t &address, const int protocol)
+{
+    if (!Cod4x_IsEnabled() || address.type != NA_IP
+        || (protocol != 1 && protocol != 6 && protocol != KISAK_COD4X_PROTOCOL_VERSION))
+    {
+        return;
+    }
+    // Master responses cap the browser at 20,000 entries. Bound stale address
+    // metadata as well; clearing only affects a later fallback to protocol 1.
+    if (advertisedServerProtocols.size() >= 20000
+        && advertisedServerProtocols.find(ServerAddressKey(address)) == advertisedServerProtocols.end())
+    {
+        advertisedServerProtocols.clear();
+    }
+    advertisedServerProtocols[ServerAddressKey(address)] = protocol;
+}
+
+void Cod4x_BeginConnection(const netadr_t &address)
+{
+    extendedProtocol = false;
+    connectionProtocol = 1;
+    if (!Cod4x_IsEnabled() || NET_IsLocalAddress(address))
+        return;
+
+    const auto advertised = advertisedServerProtocols.find(ServerAddressKey(address));
+    if (advertised != advertisedServerProtocols.end() && advertised->second == 6)
+        connectionProtocol = 6;
+    Com_Printf(14, "CoD4x: connecting with browser-advertised protocol %d\n", connectionProtocol);
+}
+
+int Cod4x_GetConnectionProtocol()
+{
+    return extendedProtocol ? KISAK_COD4X_PROTOCOL_VERSION : connectionProtocol;
 }
 
 int Cod4x_GetServerConfigDataSequence()
@@ -507,18 +988,9 @@ void Cod4x_ExecuteReliableMessage(msg_t *msg)
         CL_ParseGamestateCod4x(NS_CLIENT1, msg);
         break;
     case svc_download:
-        // Reliable logical messages retain the ordinary server-message opcode
-        // as their first payload byte, just like the extended gamestate above.
-        // Once removed, the stock block/WWW parser can own the transfer and
-        // all of its sequencing, retry, rename and download-list behaviour.
-        if (MSG_ReadByte(msg) != svc_download)
-        {
-            Com_PrintWarning(14, "CoD4x: malformed reliable download\n");
-            return;
-        }
         Com_Printf(14, "CoD4x: received extended download (%d bytes)\n",
             msg->cursize - msg->readcount);
-        CL_ParseDownload(NS_CLIENT1, msg);
+        ParseDownloadMessage(msg);
         break;
     case 8: // svc_steamcommands
         Com_DPrintf(14, "CoD4x: ignored Steam reliable command\n");
@@ -539,6 +1011,44 @@ void Cod4x_ExecuteReliableMessage(msg_t *msg)
     default:
         Com_PrintWarning(14, "CoD4x: unknown reliable command %d\n", command);
         break;
+    }
+}
+
+void Cod4x_BeginDownload(const char *localName, const char *remoteName)
+{
+    if (!Cod4x_UseExtendedProtocol())
+    {
+        Com_Error(ERR_DROP, "CoD4x: protocol-21 download requested without protocol 21");
+        return;
+    }
+    if (!IsSafeDownloadPath(localName) || !IsSafeDownloadPath(remoteName))
+    {
+        Com_Error(ERR_DROP, "CoD4x: refused unsafe download path");
+        return;
+    }
+    if (cls.download)
+    {
+        Com_Error(ERR_DROP, "CoD4x: attempted to begin a download while another is active");
+        return;
+    }
+
+    downloadState = {};
+    I_strncpyz(downloadState.requestedName, remoteName, sizeof(downloadState.requestedName));
+    if (!SendDownloadCommand(CLC_BEGINDOWNLOAD, remoteName))
+    {
+        downloadState = {};
+        Com_Error(ERR_DROP, "CoD4x: reliable download queue is full");
+        return;
+    }
+    Com_Printf(14, "CoD4x: requested download %s\n", remoteName);
+}
+
+void Cod4x_ReportDownloadComplete()
+{
+    if (!SendDownloadCommand(CLC_DONEDOWNLOAD))
+    {
+        Com_Error(ERR_DROP, "CoD4x: could not report download completion");
+        return;
     }
 }
 

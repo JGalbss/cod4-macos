@@ -85,6 +85,61 @@ complete compatibility. Results below were observed during development through
   not a public release.
 - The car-effect audit found no missing asset. The observed car debris and
   shellshock are authored effects, not a missing-resource fallback.
+- The exact post-LP64-fix raw executable SHA-256 is
+  `bd05e3552de2b5f43e1ca1628f8f61911a71dbe3cad9f46a10182528da5fa863`.
+  It loaded the custom `mp_mw2_term` map into active gameplay for 600 frames,
+  selected authored urban SAS/Russian teams, rendered the map compass from its
+  usermap IWD, and quit normally with an empty fatal/error scan. Evidence is in
+  `/tmp/cod4-terminal-exact.XtzFqV`.
+- That same exact executable passed a 300-frame deterministic stock
+  `mp_vacant` regression with seed `20260904`; evidence is in
+  `/tmp/cod4-final-stock-regression`.
+- A focused arm64 pointer-width audit found and fixed an active listen-server
+  skeleton-memory alignment expression that narrowed an address through
+  `unsigned int`. Remaining obvious pointer-to-32-bit conversions are confined
+  to uncompiled single-player/debug code or the dormant legacy zone loader;
+  the native multiplayer build uses the OAT loader and pointer-width storage.
+- Custom-map startup now mounts the usermap IWD before fastfile loading, uses
+  embedded IWI compression metadata when external metadata disagrees, and
+  quietly defaults absent optional vision/FX files. The Terminal load and
+  mini-map capture after those fixes is
+  `/tmp/cod4-terminal-iwi-fix.03Myb8/terminal.png`.
+- Favorites now bypass the Internet browser's empty/full/pure visibility
+  filters. This preserves the user's filter choices while ensuring a persisted
+  favorite remains listed and joinable from the Favorites source.
+- The exact frozen 0.2.1 raw arm64 executable SHA-256 is
+  `6b88b4ab056c4befd14d8327a658c8a565d22836dae46fdba581bad90fe8e306`.
+  It passed five 600-frame stock fuzz cases (`mp_vacant`, `mp_crash`,
+  `mp_shipment`, `mp_backlot`, and `mp_strike`) with seed `20260904`; evidence
+  is in `/tmp/kisak-native-fuzz.qoOSAM`. The same executable passed clean-home
+  movement, firing, reload, mouse-look, audio, capture, and clean-exit smokes on
+  `mp_mw2_rust` and `mp_mw2_term`; evidence is in
+  `/tmp/cod4-frozen-custom-smoke.oYXRPx`.
+- That exact executable also passed the two-client standard-combat gate: real
+  bullet damage, authoritative deaths, attacker scoring, killcam entry/exit,
+  and full-health respawns. Evidence is in `/tmp/kisak-native-combat.S8iGBT`.
+- On that exact executable, fixed-view countdown and active-gameplay captures
+  retain a neutral full-color base grade, direct `+nightvision` and the stock
+  action-slot binding both enter the authored green `default_night` grade, and
+  toggling off restores the neutral grade. Evidence is in
+  `/tmp/cod4-frozen-final.7eKK0d`.
+- A clean-profile startup created a cache with one Favorite named `jgalbs` at
+  `159.65.37.227:28961` without touching the normal user profile. Evidence is
+  in `/tmp/cod4-favorite-final.01xZqP`.
+- A clean-home live CoD4x connection negotiated protocol 21/xproto18, safely
+  declined the HTTP redirect, transferred `mp_highrise.iwd` through the binary
+  checksummed server path, verified CRC `87388a09`, atomically installed
+  1,355,335 bytes, and advanced to `mp_highrise.ff`. Local SHA-256
+  `8faa87fe5db526f1d7b36ffddba7a2cbd30f652063c7fa1451414873b420457f`
+  matched the server file. Evidence is in
+  `/private/tmp/cod4-live-highrise-rename-audit.X4BxOb`.
+- Clean-home Rust and Terminal pause-menu captures resolve their authored
+  compass plus `compass_overlay_map_blank`, with no checker material. Evidence
+  is in `/tmp/cod4-custom-map-validation.0KgWbR`.
+- Shipment may log a nonfatal missing `fire/tire_fire_med` effect. A full OAT
+  scan found that retail effect only in four single-player mission zones; no
+  multiplayer-loaded zone packages it. The client keeps the standard missing-FX
+  fallback and completes gameplay rather than loading unrelated SP content.
 
 Progression and automated gameplay tests used isolated `fs_homepath`
 directories so normal user profile data was not read or modified.
@@ -148,6 +203,10 @@ stapled DMG and an install/update test from the downloaded final bytes.
   point releases
 - A complete Developer-ID-signed, notarized, Gatekeeper-approved public binary
 - A production Sparkle update from an older signed build to the final release
+- Complete texture payloads for the tested third-party Rust and Terminal map
+  packages. Rust omits `watersetup0`; Terminal omits two referenced specular
+  maps and two color maps. The stock `spotlight_beam.iwi` also uses legacy IWI6
+  wavelet encoding that the native uploader does not yet decode.
 
 Treat regressions, crashes, assertions, red-screen diagnostics, and rendering
 artifacts as release blockers even if a narrower automated check passes.

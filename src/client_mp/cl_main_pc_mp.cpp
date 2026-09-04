@@ -237,6 +237,11 @@ void __cdecl CL_ServerInfoPacket(netadr_t from, msg_t *msg, int time)
         {
             if (cl_pinglist[i].adr.port && !cl_pinglist[i].time && NET_CompareAdr(from, cl_pinglist[i].adr))
             {
+#ifdef KISAK_COD4X
+                // Retain the wire protocol only for an info response that
+                // matches a browser ping we actually sent.
+                Cod4x_RememberServerProtocol(from, prot);
+#endif
                 cl_pinglist[i].time = time - cl_pinglist[i].start + 1;
                 v4 = NET_AdrToString(from);
                 Com_DPrintf(14, "ping time %dms from %s\n", cl_pinglist[i].time, v4);
@@ -335,6 +340,9 @@ void __cdecl CL_Connect_f()
             {
                 if (!clc->serverAddress.port)
                     clc->serverAddress.port = BigShort(28960);
+#ifdef KISAK_COD4X
+                Cod4x_BeginConnection(clc->serverAddress);
+#endif
                 v1 = BigShort(clc->serverAddress.port);
                 Com_Printf(
                     0,

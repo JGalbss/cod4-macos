@@ -2353,6 +2353,17 @@ void __cdecl TableLookup(int localClientNum, OperandList *list, Operand *operand
             v8 = GetSourceString(list->operands[2]);
             v4.intVal = GetSourceInt(&list->operands[1]).intVal;
             operandResult->internals.string = StringTable_Lookup(table, v4.intVal, v8, intVal);
+            // Stock pause/team menus layer the mapsTable column-7 overlay on
+            // top of the valid compass image. Custom maps are not in that
+            // stock table, and an empty material expression resolves to the
+            // renderer's checkerboard. Use the stock neutral overlay for the
+            // missing custom-map row while preserving every authored entry.
+            if (!operandResult->internals.string[0]
+                && !I_stricmp(SourceString, "mp/mapsTable.csv")
+                && v4.intVal == 0 && intVal == 7)
+            {
+                operandResult->internals.string = "compass_overlay_map_blank";
+            }
             if (uiscript_debug->current.integer)
             {
                 string = operandResult->internals.string;
@@ -2702,4 +2713,3 @@ double __cdecl GetExpressionFloat(int localClientNum, const statement_s *stateme
     else
         return 0.0;
 }
-

@@ -1024,6 +1024,53 @@ id<MTLTexture> UploadFromIwi(const GfxImage *image, const TextureLayout &declare
     id<MTLTexture> texture = nil;
     if (std::memcmp(bytes, "IWi", 3) == 0)
     {
+        // Custom-map fastfiles occasionally disagree with their external IWI about
+        // the BC compression format.  Treating BC1 bytes as BC3 (or vice versa)
+        // produces the characteristic red/blue checkerboard seen on compass and
+        // loading-screen art.  The IWI header is authoritative in that case.
+        TextureLayout iwiLayout{};
+        bool hasIwiLayout = false;
+        switch (bytes[4])
+        {
+        case 0x0B: hasIwiLayout = LayoutForFormat(kFmtDxt1, &iwiLayout); break;
+        case 0x0C: hasIwiLayout = LayoutForFormat(kFmtDxt3, &iwiLayout); break;
+        case 0x0D: hasIwiLayout = LayoutForFormat(kFmtDxt5, &iwiLayout); break;
+        default: break;
+        }
+        if (hasIwiLayout && iwiLayout.format != declared.format)
+        {
+            int uploadWidth = image->width;
+            int uploadHeight = image->height;
+            int wanted = LevelBytes(uploadWidth, uploadHeight, iwiLayout);
+            const int payloadBytes = length - kIwiHeaderSize;
+            if (wanted <= 0 || wanted > payloadBytes)
+            {
+                unsigned short dimensions[2] = {};
+                std::memcpy(dimensions, bytes + 6, sizeof(dimensions));
+                uploadWidth = dimensions[0];
+                uploadHeight = dimensions[1];
+                wanted = LevelBytes(uploadWidth, uploadHeight, iwiLayout);
+            }
+            if (uploadWidth > 0 && uploadHeight > 0 && wanted > 0
+                && wanted <= payloadBytes)
+            {
+                // IWI mip levels are smallest-to-largest, so the largest usable
+                // level is always the final `wanted` bytes in the file.
+                texture = UploadTexture(uploadWidth, uploadHeight, iwiLayout,
+                                        bytes + length - wanted, wanted, srgb);
+                if (g_traceRenderer)
+                    Com_Printf(8, "[metal] IWI metadata correction '%s': %dx%d format=%u\n",
+                               image->name ? image->name : "(unnamed)", uploadWidth,
+                               uploadHeight, static_cast<unsigned int>(bytes[4]));
+            }
+        }
+
+        if (texture)
+        {
+            FS_FreeFile(static_cast<char *>(buffer));
+            return texture;
+        }
+
         unsigned int mips[4] = {};
         std::memcpy(mips, bytes + 12, sizeof(mips));
         const int levelOffset = (mips[1] > 0 && mips[1] < mips[0])
@@ -5274,6 +5321,23 @@ void DispatchCommands(const GfxCmdArray *list)
                          0, 0, 1, 1, r, g, b, a);
             break;
         }
+        case RC_STRETCH_PIC_FLIP_ST:
+        {
+            const auto *cmd = reinterpret_cast<const GfxCmdStretchPic *>(header);
+            TraceUiMaterial(cmd);
+            const float positions[4][2] = {
+                {cmd->x, cmd->y}, {cmd->x + cmd->w, cmd->y},
+                {cmd->x + cmd->w, cmd->y + cmd->h}, {cmd->x, cmd->y + cmd->h},
+            };
+            // Match RB_DrawStretchPicFlipST: S advances down the quad while
+            // T advances across it. Action-slot arrows rely on this transpose.
+            const float uvs[4][2] = {
+                {cmd->s0, cmd->t0}, {cmd->s0, cmd->t1},
+                {cmd->s1, cmd->t1}, {cmd->s1, cmd->t0},
+            };
+            PushMaterialQuad(cmd->material, cmd->color, positions, uvs);
+            break;
+        }
         case RC_STRETCH_PIC_ROTATE_XY:
         {
             const auto *cmd = reinterpret_cast<const GfxCmdStretchPicRotateXY *>(header);
@@ -7527,6 +7591,27 @@ void PresentFrame()
         if (frontEndDataOut && frontEndDataOut->viewInfoCount)
         {
             view = &frontEndDataOut->viewInfo[frontEndDataOut->viewInfoIndex];
+            if (std::getenv("KISAK_VISION_TRACE"))
+            {
+                static float lastFilmDarkGreen = -1.0f;
+                if (view->film.tintDark[1] != lastFilmDarkGreen)
+                {
+                    lastFilmDarkGreen = view->film.tintDark[1];
+                    const MetalFilmParams tracedFilm = FilmParamsForView(view);
+                    Com_Printf(8,
+                        "[metal-vision] enabled=%u source-dark=%.3f/%.3f/%.3f "
+                        "source-light=%.3f/%.3f/%.3f bias=%.3f/%.3f/%.3f/%.3f "
+                        "base=%.3f/%.3f/%.3f delta=%.3f/%.3f/%.3f\n",
+                        tracedFilm.enabled, view->film.tintDark[0], view->film.tintDark[1],
+                        view->film.tintDark[2], view->film.tintLight[0],
+                        view->film.tintLight[1], view->film.tintLight[2],
+                        tracedFilm.colorBias[0], tracedFilm.colorBias[1],
+                        tracedFilm.colorBias[2], tracedFilm.colorBias[3],
+                        tracedFilm.colorTintBase[0], tracedFilm.colorTintBase[1],
+                        tracedFilm.colorTintBase[2], tracedFilm.colorTintDelta[0],
+                        tracedFilm.colorTintDelta[1], tracedFilm.colorTintDelta[2]);
+                }
+            }
             // A world view and first-person weapon are both rendered during the
             // pre-match freeze, so visuals alone are not a gameplay signal.
             // Anchor tests/profiling only when the predicted player can actually

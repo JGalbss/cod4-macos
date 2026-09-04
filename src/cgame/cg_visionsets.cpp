@@ -4,6 +4,8 @@
 #include <devgui/devgui.h>
 #include <universal/q_parse.h>
 
+#include <cstdlib>
+
 #ifdef KISAK_MP
 #include <client_mp/client_mp.h>
 #include <cgame_mp/cg_local_mp.h>
@@ -281,6 +283,50 @@ void __cdecl LerpVec3(float *from, float *to, float fraction, visionSetLerpStyle
     result[2] = LerpFloat(from[2], to[2], fraction, style);
 }
 
+static void CG_NormalizeNativeNakedVision(
+    const visionSetMode_t mode,
+    const char *name,
+    visionSetVars_t *settings)
+{
+#ifndef KISAK_METAL
+    // The legacy renderer already reproduces the authored grade. Keep this
+    // native-display accommodation out of shared MP/SP cgame builds.
+    (void)mode;
+    (void)name;
+    (void)settings;
+    return;
+#else
+    if (mode != VISIONSETMODE_NAKED || !name || !settings)
+        return;
+
+    // Only replace the ordinary map grade.  Scripted naked-vision sets use
+    // this same channel for damage, cinematics, and mod-authored transitions;
+    // those names must retain their authored film/glow values.
+    const char *mapName = Dvar_GetString("mapname");
+    if (I_stricmp(name, "mpintro")
+        && (!mapName || !*mapName || I_stricmp(name, mapName)))
+    {
+        return;
+    }
+
+    // The ordinary 2007 multiplayer path replaces its countdown grade with a
+    // heavily desaturated, high-contrast per-map film at match start. On modern
+    // displays that looks like the colors suddenly broke. Keep this base view at
+    // one clean full-color exposure. Night vision remains a separate channel.
+    settings->filmEnable = true;
+    settings->filmBrightness = 0.0f;
+    settings->filmContrast = 1.0f;
+    settings->filmDesaturation = 1.0f;
+    settings->filmInvert = false;
+    settings->glowEnable = false;
+    for (int channel = 0; channel < 3; ++channel)
+    {
+        settings->filmDarkTint[channel] = 1.0f;
+        settings->filmLightTint[channel] = 1.0f;
+    }
+#endif
+}
+
 char __cdecl CG_VisionSetStartLerp_To(
     int32_t localClientNum,
     visionSetMode_t mode,
@@ -299,6 +345,7 @@ char __cdecl CG_VisionSetStartLerp_To(
 
     if (!GetVisionSet(localClientNum, nameTo, &cgameGlob->visionSetTo[mode]))
         return 0;
+    CG_NormalizeNativeNakedVision(mode, nameTo, &cgameGlob->visionSetTo[mode]);
 
     memcpy(&cgameGlob->visionSetFrom[mode], &cgameGlob->visionSetCurrent[mode], sizeof(cgameGlob->visionSetFrom[mode]));
     cgameGlob->visionSetLerpData[mode].style = style;
@@ -373,12 +420,16 @@ char *__cdecl RawBufferOpen(const char *name, const char *formatFullPath)
     char fullpath[68]; // [esp+4h] [ebp-48h] BYREF
 
     Com_sprintf(fullpath, 0x40u, formatFullPath, name);
-    filebuf = Com_LoadRawTextFile(fullpath);
+    // Per-map vision files are optional.  Probe the fastfile registry without
+    // its missing-asset logger so falling back to default does not paint a red
+    // error over otherwise valid custom maps.
+    filebuf = (!IsFastFileLoad() || DB_FindXAssetEntry(ASSET_TYPE_RAWFILE, fullpath))
+        ? Com_LoadRawTextFile(fullpath) : nullptr;
     if (filebuf)
         return filebuf;
-    Com_PrintError(17, "couldn't open '%s'.\n", fullpath);
     Com_sprintf(fullpath, 0x40u, formatFullPath, "default");
-    filebuf = Com_LoadRawTextFile(fullpath);
+    filebuf = (!IsFastFileLoad() || DB_FindXAssetEntry(ASSET_TYPE_RAWFILE, fullpath))
+        ? Com_LoadRawTextFile(fullpath) : nullptr;
     if (filebuf)
         return filebuf;
     Com_PrintError(17, "couldn't open '%s'. This is a default file that you should have.\n", fullpath);
@@ -487,6 +538,7 @@ char __cdecl VisionSetCurrent(int32_t localClientNum, visionSetMode_t mode, char
 
     if (!GetVisionSet(localClientNum, name, &cgameGlob->visionSetCurrent[mode]))
         return 0;
+    CG_NormalizeNativeNakedVision(mode, name, &cgameGlob->visionSetCurrent[mode]);
 
     cgameGlob->visionSetLerpData[mode].style = VISIONSETLERP_NONE;
 
@@ -706,6 +758,26 @@ void __cdecl CG_VisionSetApplyToRefdef(int32_t localClientNum)
 
     visionChannel = (visionSetMode_t)(CG_LookingThroughNightVision(localClientNum) != 0);
 
+    if (std::getenv("KISAK_VISION_TRACE"))
+    {
+        static int lastVisionChannel = -1;
+        if (lastVisionChannel != visionChannel)
+        {
+            lastVisionChannel = visionChannel;
+            const visionSetVars_t &settings = cgameGlob->visionSetCurrent[visionChannel];
+            Com_Printf(8,
+                "[vision] channel=%d naked='%s' night='%s' style=%d film=%d "
+                "brightness=%.3f contrast=%.3f desaturation=%.3f invert=%d "
+                "light=%.3f/%.3f/%.3f dark=%.3f/%.3f/%.3f\n",
+                visionChannel, cgameGlob->visionNameNaked, cgameGlob->visionNameNight,
+                cgameGlob->visionSetLerpData[visionChannel].style, settings.filmEnable,
+                settings.filmBrightness, settings.filmContrast, settings.filmDesaturation,
+                settings.filmInvert, settings.filmLightTint[0], settings.filmLightTint[1],
+                settings.filmLightTint[2], settings.filmDarkTint[0],
+                settings.filmDarkTint[1], settings.filmDarkTint[2]);
+        }
+    }
+
     if (cgameGlob->visionSetLerpData[visionChannel].style)
     {
         film->enabled = cgameGlob->visionSetCurrent[visionChannel].filmEnable;
@@ -864,4 +936,3 @@ void __cdecl FadeRefDef(refdef_s *rd, float brightness)
     rd->film.tintLight[1] = brightness * rd->film.tintLight[1] + (1.0 - brightness) * 0.0;
     rd->film.tintLight[2] = brightness * rd->film.tintLight[2] + (1.0 - brightness) * 0.0;
 }
-

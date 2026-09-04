@@ -46,9 +46,9 @@ These values cannot safely be invented or committed:
 
 1. The public release repository is
    [`JGalbss/cod4-macos`](https://github.com/JGalbss/cod4-macos). It was
-   created empty on 2026-09-04; source and release publication are separate,
-   explicit steps because the current working tree contains uncommitted port
-   work and its existing remotes point at upstream projects.
+   initialized with the audited native source on 2026-09-04. Source and binary
+   release publication remain separate, explicit steps so each distributed
+   artifact points to its exact corresponding public source revision.
 2. A Sparkle signing key. After fetching Sparkle, run this once:
 
    ```zsh
@@ -151,9 +151,9 @@ on fragile cross-release URL rewriting or delta state.
 
 ```zsh
 GITHUB_REPOSITORY=JGalbss/cod4-macos \
-RELEASE_TAG=v0.2.0 \
+RELEASE_TAG=v0.2.1 \
 RELEASE_SOURCE_SHA="$(git rev-parse HEAD)" \
-RELEASE_NOTES=docs/RELEASE_NOTES_v0.2.0.md \
+RELEASE_NOTES=docs/RELEASE_NOTES_v0.2.1.md \
 mac/updater/prepare_update_release.zsh
 ```
 
@@ -172,7 +172,7 @@ the workspace:
 ```zsh
 printf '%s' "${SPARKLE_PRIVATE_KEY_SECRET}" | \
   SPARKLE_ED_KEY_FILE=- GITHUB_REPOSITORY=JGalbss/cod4-macos \
-  RELEASE_TAG=v0.2.0 RELEASE_SOURCE_SHA="$(git rev-parse HEAD)" \
+  RELEASE_TAG=v0.2.1 RELEASE_SOURCE_SHA="$(git rev-parse HEAD)" \
   mac/updater/prepare_update_release.zsh
 ```
 
@@ -180,7 +180,7 @@ Create or update a verified **draft** GitHub Release:
 
 ```zsh
 RELEASE_SOURCE_SHA="$(git rev-parse HEAD)" \
-  mac/updater/publish_github_release.zsh JGalbss/cod4-macos v0.2.0
+  mac/updater/publish_github_release.zsh JGalbss/cod4-macos v0.2.1
 ```
 
 The script refuses private repositories, non-draft existing releases, and any

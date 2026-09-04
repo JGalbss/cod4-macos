@@ -38,6 +38,7 @@
 #include <server_mp/server_mp.h>
 #include <universal/profile.h>
 #include <qcommon/com_bsp.h>
+#include <qcommon/files.h>
 
 #include <ui_mp/ui_mp.h>
 
@@ -138,6 +139,81 @@ BOOL cl_serverLoadingMap;
 ping_t cl_pinglist[16];
 
 bool cl_waitingOnServerToLoadMap[STATIC_MAX_LOCAL_CLIENTS];
+
+namespace
+{
+constexpr int kConnectionSetupTimeoutMs = 40000;
+
+struct ConnectionSetupWatch
+{
+    bool active;
+    int startedAt;
+    netadr_t address;
+};
+
+ConnectionSetupWatch connectionSetupWatch{};
+
+const char *ConnectionSetupPhase(const connstate_t state)
+{
+    switch (state)
+    {
+    case CA_CONNECTING:
+        return "requesting a challenge";
+    case CA_CHALLENGING:
+        return "sending connection information";
+    case CA_CONNECTED:
+        return "waiting for the game state";
+    case CA_SENDINGSTATS:
+        return "synchronizing player stats";
+    case CA_LOADING:
+        return "loading the map";
+    case CA_PRIMED:
+        return "awaiting the first snapshot";
+    default:
+        return "setting up the connection";
+    }
+}
+
+void CL_CheckConnectionSetupDeadline(const connstate_t state, clientConnection_t *clc)
+{
+    const bool setupState = state >= CA_CONNECTING && state < CA_ACTIVE;
+    const bool downloading = state == CA_CONNECTED
+        && (cls.downloadName[0] || cls.wwwDlInProgress);
+    if (!setupState || downloading || !clc || NET_IsLocalAddress(clc->serverAddress))
+    {
+        connectionSetupWatch.active = false;
+        return;
+    }
+
+    if (!connectionSetupWatch.active
+        || !NET_CompareAdr(connectionSetupWatch.address, clc->serverAddress))
+    {
+        connectionSetupWatch.active = true;
+        connectionSetupWatch.startedAt = cls.realtime;
+        connectionSetupWatch.address = clc->serverAddress;
+        return;
+    }
+
+    if (cls.realtime - connectionSetupWatch.startedAt < kConnectionSetupTimeoutMs)
+        return;
+
+    char serverAddress[64];
+    I_strncpyz(serverAddress, NET_AdrToString(clc->serverAddress), sizeof(serverAddress));
+#ifdef KISAK_COD4X
+    const int protocol = Cod4x_GetConnectionProtocol();
+#else
+    const int protocol = 1;
+#endif
+    const char *phase = ConnectionSetupPhase(state);
+    connectionSetupWatch.active = false;
+    Com_PrintError(14,
+        "Connection setup timed out while %s (protocol %d, server %s)\n",
+        phase, protocol, serverAddress);
+    Com_Error(ERR_DROP,
+        "Connection setup timed out while %s (protocol %d, server %s)",
+        phase, protocol, serverAddress);
+}
+}
 
 int32_t cl_maxLocalClients;
 int32_t old_com_frameTime;
@@ -379,6 +455,12 @@ void __cdecl CL_MapLoading(const char *mapname)
                     clca->connectTime = -3000;
                     clca->qport = localClientNumb + g_qport;
                     NET_StringToAdr(cls.servername, &clca->serverAddress);
+#ifdef KISAK_COD4X
+                    // A listen server always speaks the stock loopback protocol.
+                    // Reset protocol negotiation left by the previous Internet
+                    // connection before the first localhost challenge is sent.
+                    Cod4x_BeginConnection(clca->serverAddress);
+#endif
                     CL_CheckForResend(localClientNumb);
                     if (!*mapname)
                         MyAssertHandler(".\\client_mp\\cl_main_mp.cpp", 1498, 0, "%s", "mapname[0]");
@@ -921,6 +1003,10 @@ void __cdecl LoadMapLoadscreen(const char *mapname)
     XZoneInfo zoneInfo[1]; // [esp+0h] [ebp-54h] BYREF
     char zoneName[68]; // [esp+Ch] [ebp-48h] BYREF
 
+    // Custom-map load and compass images live beside the fastfiles in the
+    // usermap IWD.  Mount it before loading the zone so image registration
+    // does not permanently cache the renderer's checkerboard fallback.
+    FS_AddUserMapDirIWD(mapname);
     DB_ResetZoneSize(0);
     Com_sprintf(zoneName, 0x40u, "%s_load", mapname);
     zoneInfo[0].name = zoneName;
@@ -969,7 +1055,16 @@ void __cdecl CL_DownloadsComplete(int32_t localClientNum)
         FS_Restart(localClientNum, clc->checksumFeed);
         CL_Vid_Restart_f();
         if (!cls.wwwDlDisconnected)
+#ifdef KISAK_COD4X
+        {
+            if (Cod4x_UseExtendedProtocol())
+                Cod4x_ReportDownloadComplete();
+            else
+                CL_AddReliableCommand(localClientNum, "donedl");
+        }
+#else
             CL_AddReliableCommand(localClientNum, "donedl");
+#endif
         cls.wwwDlDisconnected = 0;
         CL_ClearStaticDownload();
         return;
@@ -1110,7 +1205,7 @@ void __cdecl CL_CheckForResend(netsrc_t localClientNum)
                 v3 = Dvar_InfoString(localClientNum, 2);
                 I_strncpyz(dest, v3, 1024);
 #ifdef KISAK_COD4X
-                v4 = va("%i", Cod4x_UseExtendedProtocol() ? KISAK_COD4X_PROTOCOL_VERSION : 1);
+                v4 = va("%i", Cod4x_GetConnectionProtocol());
 #else
                 v4 = va("%i", 1);
 #endif
@@ -2219,10 +2314,11 @@ void __cdecl CL_CheckTimeout(int32_t localClientNum)
             "(localClientNum == 0)",
             localClientNum);
     connstate = clientUIActives[0].connectionState;
+    clc = CL_GetLocalClientConnection(localClientNum);
+    CL_CheckConnectionSetupDeadline(connstate, clc);
     if (clientUIActives[0].connectionState >= 3)
     {
         LocalClientGlobals = CL_GetLocalClientGlobals(localClientNum);
-        clc = CL_GetLocalClientConnection(localClientNum);
         if ((cl_paused->current.integer && sv_paused->current.integer)
             || connstate < CA_PRIMED
             || clc->lastPacketTime <= 0
@@ -3743,7 +3839,7 @@ void __cdecl CL_InitOnceForAllClients()
     mina.value.min = 0.0;
     cl_connectTimeout = Dvar_RegisterFloat(
         "cl_connectTimeout",
-        200.0,
+        40.0,
         mina,
         DVAR_NOFLAG,
         "Timeout time in seconds while connecting to a server");

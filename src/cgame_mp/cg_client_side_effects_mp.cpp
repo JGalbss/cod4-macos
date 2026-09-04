@@ -383,11 +383,14 @@ void __cdecl CG_LoadClientEffects_FastFile(int32_t localClientNum, const char *f
 {
     RawFile *rawfile; // [esp+4h] [ebp-4h]
 
+    // Community maps are allowed to omit generated client-side effect files.
+    // Avoid registering a missing asset (and its red developer overlay) when
+    // the map simply has no createfx data.
+    if (!DB_FindXAssetEntry(ASSET_TYPE_RAWFILE, filename))
+        return;
     rawfile = DB_FindXAssetHeader(ASSET_TYPE_RAWFILE, filename).rawfile;
     if (rawfile)
         CG_ParseClientEffects(localClientNum, (char *)rawfile->buffer);
-    else
-        Com_PrintError(1, "file not found: %s\n", filename);
 }
 
 void __cdecl CG_LoadClientEffectMapping_LoadObj(const char *filename)
@@ -497,11 +500,11 @@ void __cdecl CG_LoadClientEffectMapping_FastFile(const char *filename)
 {
     RawFile *rawfile; // [esp+4h] [ebp-4h]
 
+    if (!DB_FindXAssetEntry(ASSET_TYPE_RAWFILE, filename))
+        return;
     rawfile = DB_FindXAssetHeader(ASSET_TYPE_RAWFILE, filename).rawfile;
     if (rawfile)
         CG_ParseClientEffectMapping(rawfile->buffer);
-    else
-        Com_PrintError(1, "file not found: %s\n", filename);
 }
 
 void __cdecl CG_ClientSideEffectsRegisterDvars()
@@ -550,4 +553,3 @@ void __cdecl CG_CopyClientSideSoundEntityOrientation(
     origin_out[1] = v3->origin[1];
     origin_out[2] = v3->origin[2];
 }
-

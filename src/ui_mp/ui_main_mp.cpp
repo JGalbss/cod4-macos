@@ -3711,6 +3711,25 @@ void __cdecl UI_BuildServerDisplayList(uiInfo_s *uiInfo, int force)
                     if (ping > 0 || ui_netSource->current.integer == 2)
                     {
                         LAN_GetServerInfo(ui_netSource->current.integer, i, info, 1024);
+
+                        // Favorites are the player's saved endpoints, not a
+                        // discovery result.  Keep them visible even while a
+                        // server is restarting, downloading a map, or has not
+                        // answered its first status ping yet.  Applying the
+                        // Internet browser's empty/full/pure filters here made
+                        // valid persisted Favorites appear to be missing.
+                        if (ui_netSource->current.integer == 2)
+                        {
+                            UI_RemoveServerFromDisplayList(i);
+                            UI_BinaryServerInsertion(i);
+                            if (ping > 0)
+                            {
+                                LAN_MarkServerDirty(ui_netSource->current.integer, i, 0);
+                                ++numclean;
+                            }
+                            continue;
+                        }
+
                         v4 = Info_ValueForKey(info, "clients");
                         clients = atoi(v4);
                         *(unsigned int *)&sharedUiInfo.gap8EB4[72908] += clients;

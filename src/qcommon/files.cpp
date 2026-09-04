@@ -108,6 +108,46 @@ int __cdecl FS_iwIwd(char *iwd, char *base)
     return 0;
 }
 
+#ifdef KISAK_COD4X
+bool FS_IsSafeUserMapDownloadName(const char *name)
+{
+    constexpr const char prefix[] = "usermaps/";
+    if (!name || I_strnicmp(name, prefix, sizeof(prefix) - 1)
+        || !name[sizeof(prefix) - 1]
+        || strlen(name) + strlen(".iwd") >= MAX_QPATH)
+    {
+        return false;
+    }
+
+    const char *component = name + sizeof(prefix) - 1;
+    for (const unsigned char *cursor = reinterpret_cast<const unsigned char *>(component); ; ++cursor)
+    {
+        const unsigned char character = *cursor;
+        const bool alphaNumeric = (character >= '0' && character <= '9')
+            || (character >= 'A' && character <= 'Z')
+            || (character >= 'a' && character <= 'z');
+        if (character && character != '/' && !alphaNumeric
+            && character != '_' && character != '-' && character != '.')
+        {
+            return false;
+        }
+        if (!character || character == '/')
+        {
+            const size_t componentLength = reinterpret_cast<const char *>(cursor) - component;
+            if (!componentLength
+                || (componentLength == 1 && component[0] == '.')
+                || (componentLength == 2 && component[0] == '.' && component[1] == '.'))
+            {
+                return false;
+            }
+            if (!character)
+                return true;
+            component = reinterpret_cast<const char *>(cursor) + 1;
+        }
+    }
+}
+#endif
+
 int __cdecl FS_CompareIwds(char *needediwds, int len, int dlstring)
 {
     char *v4; // eax
@@ -160,8 +200,15 @@ int __cdecl FS_CompareIwds(char *needediwds, int len, int dlstring)
                         fs_serverReferencedIwdNames[i], fs_serverReferencedIwds[i]);
                 }
 #endif
-                if ((const char *)v7 == v5
-                    || I_strnicmp(fs_serverReferencedIwdNames[i], fs_gameDirVar->current.string, (int)(v7 - (uintptr_t)v5))
+                const bool gameDirectoryIwd = (const char *)v7 != v5
+                    && !I_strnicmp(fs_serverReferencedIwdNames[i], fs_gameDirVar->current.string,
+                        (int)(v7 - (uintptr_t)v5));
+#ifdef KISAK_COD4X
+                const bool userMapIwd = FS_IsSafeUserMapDownloadName(fs_serverReferencedIwdNames[i]);
+#else
+                const bool userMapIwd = false;
+#endif
+                if ((!gameDirectoryIwd && !userMapIwd)
                     || FS_iwIwd((char *)fs_serverReferencedIwdNames[i], (char*)"main"))
                 {
                     I_strncpyz(needediwds, (char *)fs_serverReferencedIwdNames[i], len);

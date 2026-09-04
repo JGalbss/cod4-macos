@@ -54,6 +54,7 @@ cmake -S "${PROJECT_DIR}" -B "${PROJECT_DIR}/build-metal" -G Ninja \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=15.5 \
   -DKISAK_TARGET=posix \
   -DKISAK_METAL=ON \
+  -DKISAK_SPARKLE_UPDATER=ON \
   -DOAT_ROOT="${OAT_DIR}"
 cmake --build "${PROJECT_DIR}/build-metal" --target kisak_posix -j "${JOBS}"
 

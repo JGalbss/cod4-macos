@@ -13,6 +13,7 @@
 #include <universal/com_constantconfigstrings.h>
 #include <qcommon/threads.h>
 #include <qcommon/com_bsp.h>
+#include <qcommon/files.h>
 #include <universal/com_sndalias.h>
 #include <qcommon/cmd.h>
 #include <stringed/stringed_hooks.h>
@@ -399,6 +400,10 @@ void __cdecl SV_SpawnServer(char *mapname)
     const char *p; // [esp+C4h] [ebp-4h]
 
     Com_SyncThreads();
+    // A listen server loads the level fastfiles before its client receives a
+    // gamestate.  Make the custom-map IWD visible to both the load zone and
+    // its streamed image dependencies at that first registration point.
+    FS_AddUserMapDirIWD(mapname);
     Sys_BeginLoadThreadPriorities();
     mapIsPreloaded = 0;
     if (IsFastFileLoad() && !com_dedicated->current.integer)
@@ -409,18 +414,16 @@ void __cdecl SV_SpawnServer(char *mapname)
         zoneInfo.allocFlags = 32;
         zoneInfo.freeFlags = 96;
         DB_LoadXAssets(&zoneInfo, 1, 0);
+        // The first load-screen paint must not run until its levelbriefing
+        // material and image are registered by the asynchronous zone load.
+        DB_SyncXAssets();
+        DB_UpdateDebugZone();
     }
     Scr_ParseGameTypeList();
     SV_SetGametype();
 
     if (!mapIsPreloaded)
         CL_InitLoad(mapname, sv_gametype->current.string);
-
-    if (IsFastFileLoad() && !mapIsPreloaded)
-    {
-        DB_SyncXAssets();
-        DB_UpdateDebugZone();
-    }
 
     R_BeginRemoteScreenUpdate();
     if (fs_debug->current.integer == 2)
@@ -494,6 +497,9 @@ void __cdecl SV_SpawnServer(char *mapname)
     srand(Sys_MillisecondsRaw());
     sv.checksumFeed = Sys_Milliseconds() ^ (rand() ^ (rand() << 16));
     FS_Restart(0, sv.checksumFeed);
+    // FS_Restart rebuilds the search path, so restore the usermap IWD before
+    // the main map zone is registered.
+    FS_AddUserMapDirIWD(mapname);
 
     if (!IsFastFileLoad())
     {

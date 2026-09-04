@@ -555,7 +555,11 @@ void __cdecl SV_InitGameVM(unsigned int randomSeed, int restart, int savegame, S
     if (!++sv.skelTimeStamp)
         sv.skelTimeStamp = 1;
     sv.skelMemPos = 0;
-    g_sv_skel_memory_start = (char *)((unsigned int)&g_sv_skel_memory[15] & 0xFFFFFFF0);
+    // Preserve the full address on LP64 hosts while rounding the static arena
+    // down to the required 16-byte boundary.  The original 32-bit cast could
+    // truncate an arm64 pointer and crash listen-server skeleton allocation.
+    g_sv_skel_memory_start =
+        (char *)((uintptr_t)&g_sv_skel_memory[15] & ~uintptr_t{0xF});
     SND_ErrorCleanup();
 
     {

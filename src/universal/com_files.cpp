@@ -2743,17 +2743,18 @@ void __cdecl FS_Remove(const char *osPath)
 
 void __cdecl FS_SV_Rename(char *from, char *to)
 {
-    char *v2; // [esp+1Ch] [ebp-20Ch]
     char to_ospath[256]; // [esp+20h] [ebp-208h] BYREF
     char from_ospath[260]; // [esp+120h] [ebp-108h] BYREF
 
     FS_CheckFileSystemStarted();
     FS_BuildOSPath((char *)fs_homepath->current.string, from, (char *)"", from_ospath);
     FS_BuildOSPath((char *)fs_homepath->current.string, to, (char *)"", to_ospath);
-    v2 = from_ospath;
-    v2 += strlen(v2) + 1;
-    to_ospath[v2 - &from_ospath[1] + 255] = 0;
-    to_ospath[&to_ospath[strlen(to_ospath) + 1] - &to_ospath[1] - 1] = 0;
+    const size_t fromLength = strlen(from_ospath);
+    const size_t toLength = strlen(to_ospath);
+    if (fromLength && (from_ospath[fromLength - 1] == '/' || from_ospath[fromLength - 1] == '\\'))
+        from_ospath[fromLength - 1] = 0;
+    if (toLength && (to_ospath[toLength - 1] == '/' || to_ospath[toLength - 1] == '\\'))
+        to_ospath[toLength - 1] = 0;
     if (fs_debug->current.integer == 1)
         Com_Printf(10, "FS_SV_Rename: %s --> %s\n", from_ospath, to_ospath);
     if (rename(from_ospath, to_ospath))

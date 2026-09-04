@@ -1428,6 +1428,7 @@ void __cdecl R_RenderScene(const refdef_s *refdef)
         frontEndDataOut->viewInfoIndex = viewInfoIndex;
         GfxViewInfo *const viewInfo = &frontEndDataOut->viewInfo[viewInfoIndex];
         memset(viewInfo, 0, sizeof(*viewInfo));
+        memcpy(&viewInfo->input, &gfxCmdBufInput, sizeof(viewInfo->input));
         memcpy(&viewInfo->viewParms, viewParmsDraw, sizeof(viewInfo->viewParms));
         viewInfo->sceneDef = scene.def;
         viewInfo->sceneViewport = sceneParms.sceneViewport;
@@ -1437,6 +1438,12 @@ void __cdecl R_RenderScene(const refdef_s *refdef)
         viewInfo->isRenderingFullScreen = sceneParms.isRenderingFullScreen;
         viewInfo->blurRadius = sceneParms.blurRadius;
         viewInfo->input.data = frontEndDataOut;
+        // The native frontend still consumes the original view-level post-FX
+        // state. Without these steps Metal sees zeroed film/glow/DOF data, so
+        // night vision loses its green grade and graphics settings are inert.
+        R_SetDepthOfField(viewInfo, &sceneParms);
+        R_SetFilmInfo(viewInfo, &sceneParms);
+        R_SetGlowInfo(viewInfo, &sceneParms);
 
         // Run the original IW3 portal/PVS visibility front end without entering
         // D3D draw-surface generation. The native encoder consumes the durable
@@ -1902,12 +1909,19 @@ void __cdecl R_SetDepthOfField(GfxViewInfo *viewInfo, const GfxSceneParms *scene
     }
     if (R_UsingDepthOfField(viewInfo))
     {
+#ifndef KISAK_METAL
         if (!gfxRenderTargets[R_RENDERTARGET_FLOAT_Z].surface.color)
             Com_Error(
                 ERR_FATAL,
                 "Depth of field used (enabled via r_dof_enable or r_dof_tweak) with no float-z buffer (r_floatz wasn't enabled wh"
                 "en the renderer was started.)\n");
         viewInfo->needsFloatZ = 1;
+#else
+        // Metal owns a native depth attachment and resolves it directly for the
+        // post pass; it does not allocate the legacy D3D FLOAT_Z render target.
+        // Keep the authored DOF parameters without tripping the D3D-only guard.
+        viewInfo->needsFloatZ = 0;
+#endif
         if (com_statmon->current.enabled)
         {
             font = R_RegisterFont("fonts/consoleFont", 1);

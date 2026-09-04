@@ -22,15 +22,18 @@ when prompted.
 
 The jgalbs server is ensured in Favorites for fresh and upgraded profiles.
 Other saved Favorites are preserved and its address is not duplicated.
+CoD4x protocol-21 server downloads are supported with bounded paths and
+checksum verification; downloaded retail/custom content is stored in the
+user's Application Support data directory, not inside the application bundle.
 
 Mod compatibility
 -----------------
 
 The client exposes the normal fs_game paths used by CoD4 script, IWD, fastfile,
-and asset mods, but broad mod compatibility has not been established. The New
-Experience server/mod is part of the current native test scope. A mod that
-ships its own Windows-only DLL is not directly loadable by an arm64 macOS
-process and needs a native source port of that DLL.
+and asset mods, but broad mod compatibility has not been established. The
+jgalbs server and its custom-map content are part of the current native test
+scope. A mod that ships its own Windows-only DLL is not directly loadable by an
+arm64 macOS process and needs a native source port of that DLL.
 
 Licensing
 ---------

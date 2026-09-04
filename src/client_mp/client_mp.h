@@ -970,6 +970,7 @@ void __cdecl CL_SystemInfoChanged(int32_t localClientNum);
 void __cdecl CL_ParseMapCenter(int32_t localClientNum);
 void __cdecl CL_ParseServerMessage(netsrc_t localClientNum, msg_t *msg);
 void __cdecl CL_ParseDownload(int localClientNum, msg_t *msg);
+void __cdecl CL_NextDownload(int localClientNum);
 void __cdecl CL_ParseSnapshot(int32_t localClientNum, msg_t *msg);
 void __cdecl CL_ParsePacketEntities(
     clientActive_t *cl,

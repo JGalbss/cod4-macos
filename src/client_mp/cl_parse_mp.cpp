@@ -317,6 +317,13 @@ void __cdecl CL_BeginDownload(char *localName, char *remoteName)
     legacyHacks.cl_downloadTime = cls.realtime;
     cls.downloadBlock = 0;
     cls.downloadCount = 0;
+#ifdef KISAK_COD4X
+    if (Cod4x_UseExtendedProtocol())
+    {
+        Cod4x_BeginDownload(localName, remoteName);
+        return;
+    }
+#endif
     v2 = va("download %s", remoteName);
     CL_AddReliableCommand(0, v2);
 }
