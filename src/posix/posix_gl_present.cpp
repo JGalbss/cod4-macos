@@ -27,6 +27,7 @@ namespace {
 
 SDL_Window *g_window = nullptr;
 std::atomic<unsigned long long> g_requestedWindowSize{0};
+std::atomic<int> g_requestedFullscreen{-1};
 #ifndef KISAK_DXVK
 SDL_GLContext g_context = nullptr;
 #endif
@@ -527,9 +528,26 @@ void RequestWindowSize(const int width, const int height)
     g_requestedWindowSize.store(packed, std::memory_order_release);
 }
 
+void RequestWindowFullscreen(const bool fullscreen)
+{
+    g_requestedFullscreen.store(fullscreen ? 1 : 0, std::memory_order_release);
+}
+
 void UpdateWindowMainThread()
 {
-    if (!g_window || (SDL_GetWindowFlags(g_window) & SDL_WINDOW_FULLSCREEN) != 0)
+    if (!g_window)
+        return;
+
+    const int requestedFullscreen = g_requestedFullscreen.exchange(
+        -1, std::memory_order_acq_rel);
+    if (requestedFullscreen >= 0)
+    {
+        const Uint32 flags = requestedFullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0;
+        if (SDL_SetWindowFullscreen(g_window, flags) != 0)
+            std::fprintf(stderr, "SDL_SetWindowFullscreen failed: %s\n", SDL_GetError());
+    }
+
+    if ((SDL_GetWindowFlags(g_window) & SDL_WINDOW_FULLSCREEN) != 0)
         return;
     const auto packed = g_requestedWindowSize.exchange(0, std::memory_order_acq_rel);
     if (!packed)

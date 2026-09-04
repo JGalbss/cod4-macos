@@ -6,6 +6,9 @@
 #include <database/database.h>
 #include "cmd.h"
 #include <sound/snd_public.h>
+#ifdef KISAK_COD4X
+#include <cod4x/cod4x_client.h>
+#endif
 
 int fs_numServerReferencedIwds;
 char basename[64];
@@ -256,7 +259,12 @@ int __cdecl FS_CompareFFs(char *neededFFs, int len, int dlstring)
     {
         const char *serverName = fs_serverReferencedFFNames[i];
 #ifdef KISAK_COD4X
-        if (!I_stricmp(serverName, "cod4x_ambfix"))
+        // These zones implement the CoD4x runtime itself.  The native port has
+        // its own implementation and must not reject a server merely because
+        // its bundled runtime revision has a different byte size.
+        if (Cod4x_UseExtendedProtocol()
+            && (!I_stricmp(serverName, "cod4x_ambfix")
+                || !I_stricmp(serverName, "cod4x_patchv2")))
             continue;
 #endif
 

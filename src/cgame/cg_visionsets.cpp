@@ -701,6 +701,21 @@ void __cdecl CG_VisionSetUpdateTweaksFromFile_Film()
     }
 }
 
+static constexpr bool CG_NightVisionFlagAllowsChannel(
+    const int weaponState,
+    const int weapFlags)
+{
+    (void)weaponState;
+    return (weapFlags & 0x40) != 0;
+}
+
+static_assert(!CG_NightVisionFlagAllowsChannel(WEAPON_NIGHTVISION_WEAR, 0),
+    "wear animation without the NVG flag must not select the night channel");
+static_assert(!CG_NightVisionFlagAllowsChannel(WEAPON_NIGHTVISION_REMOVE, 0),
+    "remove animation without the NVG flag must not select the night channel");
+static_assert(CG_NightVisionFlagAllowsChannel(WEAPON_NIGHTVISION_WEAR, 0x40),
+    "the authoritative NVG flag must continue to enable transition timing");
+
 char __cdecl CG_LookingThroughNightVision(int32_t localClientNum)
 {
     int32_t weapIndex; // [esp+4h] [ebp-10h]
@@ -723,6 +738,18 @@ char __cdecl CG_LookingThroughNightVision(int32_t localClientNum)
 
     cg_s *cgameGlob = CG_GetLocalClientGlobals(localClientNum);
 
+    // PM_Weapon_CheckForNightVision owns bit 0x40: it is set only by the NVG
+    // input edge and cleared by the matching remove edge. Weapon states 25/26
+    // merely time the wear/remove animations and can be observed transiently
+    // while snapshots or view weapons change. Never let those state numbers
+    // select the green channel when the authoritative bit is clear.
+    if (!CG_NightVisionFlagAllowsChannel(
+            cgameGlob->predictedPlayerState.weaponstate,
+            cgameGlob->predictedPlayerState.weapFlags))
+    {
+        return 0;
+    }
+
     weapIndex = BG_GetViewmodelWeaponIndex(&cgameGlob->predictedPlayerState);
     weapDef = BG_GetWeaponDef(weapIndex);
 
@@ -736,7 +763,7 @@ char __cdecl CG_LookingThroughNightVision(int32_t localClientNum)
         if (weapDef->nightVisionRemoveTime - cgameGlob->predictedPlayerState.weaponTime <= weapDef->nightVisionRemoveTimePowerDown)
             return 1;
     }
-    else if ((cgameGlob->predictedPlayerState.weapFlags & 0x40) != 0)
+    else
     {
         return 1;
     }
@@ -766,10 +793,14 @@ void __cdecl CG_VisionSetApplyToRefdef(int32_t localClientNum)
             lastVisionChannel = visionChannel;
             const visionSetVars_t &settings = cgameGlob->visionSetCurrent[visionChannel];
             Com_Printf(8,
-                "[vision] channel=%d naked='%s' night='%s' style=%d film=%d "
+                "[vision] channel=%d state=%d time=%d flags=0x%x "
+                "naked='%s' night='%s' style=%d film=%d "
                 "brightness=%.3f contrast=%.3f desaturation=%.3f invert=%d "
                 "light=%.3f/%.3f/%.3f dark=%.3f/%.3f/%.3f\n",
-                visionChannel, cgameGlob->visionNameNaked, cgameGlob->visionNameNight,
+                visionChannel, cgameGlob->predictedPlayerState.weaponstate,
+                cgameGlob->predictedPlayerState.weaponTime,
+                cgameGlob->predictedPlayerState.weapFlags,
+                cgameGlob->visionNameNaked, cgameGlob->visionNameNight,
                 cgameGlob->visionSetLerpData[visionChannel].style, settings.filmEnable,
                 settings.filmBrightness, settings.filmContrast, settings.filmDesaturation,
                 settings.filmInvert, settings.filmLightTint[0], settings.filmLightTint[1],

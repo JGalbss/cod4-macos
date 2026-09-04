@@ -89,6 +89,7 @@ ${combat_binary} \
     +set developer 1 \
     +set logfile 2 \
     +set g_log combat.log \
+    +set r_fullscreen 0 \
     +set r_vsync 0 \
     +set com_maxfps 60 \
     +set g_gametype war \
@@ -110,6 +111,7 @@ ${combat_binary} \
     +set net_port $((combat_port + 1)) \
     +set name NativeVictim \
     +set developer 1 \
+    +set r_fullscreen 0 \
     +set r_vsync 0 \
     +set com_maxfps 60 \
     +connect 127.0.0.1:${combat_port} >${combat_guest_log} 2>&1 &

@@ -32,6 +32,7 @@ int DisplayFrequency();
 // Engine-thread request and main-thread application for a windowed video-mode
 // change. AppKit window mutation must stay on the process main thread.
 void RequestWindowSize(int width, int height);
+void RequestWindowFullscreen(bool fullscreen);
 void UpdateWindowMainThread();
 
 // Main-thread macOS helpers used before engine startup. They remember a

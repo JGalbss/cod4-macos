@@ -7,6 +7,27 @@ The project uses semantic versioning while the port is under active development.
 
 No user-facing changes yet.
 
+## 0.2.2 release candidate - 2026-09-04
+
+### Changed
+
+- New Apple Silicon profiles start in native macOS full-screen mode, while the
+  archived graphics option stays synchronized with the macOS full-screen Space.
+- Deterministic combat and fuzz harnesses explicitly remain windowed so the new
+  user-facing default cannot hide or throttle parallel test clients.
+
+### Fixed
+
+- Prevented transient weapon animation states from enabling night vision unless
+  the authoritative NVG flag is set, eliminating surprise neon-green gameplay.
+- Stopped the Metal base-world pass from drawing shadow-only brush faces as the
+  stock red/yellow `Shadow` texture on windows and doors.
+- Parsed and acknowledged live CoD4x protocol-21 client configuration packets,
+  removing the `Illegible server message 11`/`Connection Interrupted` loop.
+- Allowed the native protocol-21 runtime to coexist with server-side
+  `cod4x_patchv2` and `cod4x_ambfix` revisions without weakening stock-protocol
+  fastfile checks.
+
 ## 0.2.1 release candidate - 2026-09-04
 
 ### Changed

@@ -535,7 +535,12 @@
      r_ignore = Dvar_RegisterInt("r_ignore", 0, (DvarLimits)0x7FFFFFFF80000000LL, DVAR_NOFLAG, "used for debugging anything");
      vid_xpos = Dvar_RegisterInt("vid_xpos", 3, (DvarLimits)0x1000FFFFF000LL, DVAR_ARCHIVE, "Game window horizontal position");
      vid_ypos = Dvar_RegisterInt("vid_ypos", 22, (DvarLimits)0x1000FFFFF000LL, DVAR_ARCHIVE, "game window vertical position");
-     r_fullscreen = Dvar_RegisterBool("r_fullscreen", 0, DVAR_LATCH | DVAR_ARCHIVE, "Display game full screen");
+#if defined(__APPLE__) && defined(KISAK_METAL)
+     constexpr bool nativeFullscreenDefault = true;
+#else
+     constexpr bool nativeFullscreenDefault = false;
+#endif
+     r_fullscreen = Dvar_RegisterBool("r_fullscreen", nativeFullscreenDefault, DVAR_LATCH | DVAR_ARCHIVE, "Display game full screen");
      min.value.max = 3.0;
      min.value.min = 0.5;
      r_gamma = Dvar_RegisterFloat("r_gamma", 0.80000001f, min, DVAR_ARCHIVE, "Gamma value");

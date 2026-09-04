@@ -106,6 +106,7 @@ void UpdateNativeDisplayDvars(const int width, const int height, const bool resi
 {
     auto *const mode = const_cast<dvar_t *>(Dvar_FindVar("r_mode"));
     auto *const refresh = const_cast<dvar_t *>(Dvar_FindVar("r_displayRefresh"));
+    auto *const fullscreen = const_cast<dvar_t *>(Dvar_FindVar("r_fullscreen"));
     static bool initialized = false;
 
     if (!initialized)
@@ -119,7 +120,17 @@ void UpdateNativeDisplayDvars(const int width, const int height, const bool resi
             Dvar_SetFromString(mode, actualMode);
         if (refresh)
             Dvar_SetFromString(refresh, g_nativeRefreshName);
+        if (fullscreen)
+            posix_gl::RequestWindowFullscreen(fullscreen->current.enabled);
         initialized = true;
+    }
+
+    if (fullscreen && Dvar_HasLatchedValue(fullscreen))
+    {
+        Dvar_MakeLatchedValueCurrent(fullscreen);
+        posix_gl::RequestWindowFullscreen(fullscreen->current.enabled);
+        Com_Printf(8, "[posix] applying native fullscreen=%d\n",
+                   fullscreen->current.enabled ? 1 : 0);
     }
 
     if (mode && Dvar_HasLatchedValue(mode))
@@ -293,6 +304,16 @@ void UpdateVideoConfiguration()
 
     const bool fullscreen = posix_gl::Window()
         && (SDL_GetWindowFlags(posix_gl::Window()) & SDL_WINDOW_FULLSCREEN) != 0;
+    auto *const fullscreenDvar = const_cast<dvar_t *>(Dvar_FindVar("r_fullscreen"));
+    if (fullscreenDvar && !Dvar_HasLatchedValue(fullscreenDvar)
+        && fullscreenDvar->current.enabled != fullscreen)
+    {
+        // Keep the archived option in sync when the user enters or leaves a
+        // native macOS full-screen Space with the green window control.
+        char fullscreenValue[] = "0";
+        fullscreenValue[0] = fullscreen ? '1' : '0';
+        Dvar_SetFromString(fullscreenDvar, fullscreenValue);
+    }
     const auto *const aspectDvar = Dvar_FindVar("r_aspectRatio");
     const int aspectChoice = aspectDvar ? aspectDvar->current.integer : 0;
     static int lastAspectChoice = -1;

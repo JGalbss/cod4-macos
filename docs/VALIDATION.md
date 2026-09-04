@@ -155,6 +155,24 @@ complete compatibility. Results below were observed during development through
   scan found that retail effect only in four single-player mission zones; no
   multiplayer-loaded zone packages it. The client keeps the standard missing-FX
   fallback and completes gameplay rather than loading unrelated SP content.
+- The 0.2.2 raw arm64 executable SHA-256 is
+  `de12fc7296197e0e03f1cdcf8601e079f3c76f717d70b77dce6fd69254cdf9bb`.
+  Neutral gameplay, explicit NVG, and NVG-on-to-off captures are in
+  `/tmp/cod4-normal-vacant.bUt9Kk`, `/tmp/cod4-nvg-vacant.HyPU4e`, and
+  `/tmp/cod4-nvg-toggle.wT45PY`. The neutral captures contain no red/yellow
+  `Shadow` tool surface, and the trace selects the night channel only while the
+  authoritative NVG flag is set.
+- Two clean native clients joined `159.65.37.227:28961` over protocol 21. The
+  observer accepted client-config sequence 13; neither log contains an illegal
+  server message, connection interruption, timeout, assertion, or fatal error.
+  Evidence is in `/tmp/cod4-live-two-client.p65K5W`.
+- That exact executable passed the full two-client combat lifecycle in
+  `/tmp/kisak-native-combat.jj12Si` and five 1,200-frame deterministic fuzz
+  cases on Vacant, Crash, Shipment, Backlot, and Strike in
+  `/tmp/kisak-native-fuzz.6yHRN9`.
+- A clean launch with `r_fullscreen=1` reported `AXFullScreen=true` through
+  macOS accessibility state and reconfigured the renderer to the full-screen
+  Space. Evidence is in `/tmp/cod4-fullscreen.9w59qY`.
 
 Progression and automated gameplay tests used isolated `fs_homepath`
 directories so normal user profile data was not read or modified.

@@ -236,6 +236,7 @@ required_files=(
     docs/RELEASE.md
     docs/RELEASE_NOTES_v0.2.0.md
     docs/RELEASE_NOTES_v0.2.1.md
+    docs/RELEASE_NOTES_v0.2.2.md
     src/buildnumber.h
     src/gfx_d3d/r_drawsurf.cpp
     deps/ode/LICENSE-BSD.TXT

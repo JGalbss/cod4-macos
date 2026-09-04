@@ -16,6 +16,7 @@
 #include <client/client.h>
 #ifdef KISAK_COD4X
 #include <cod4x/cod4x_client.h>
+#include <climits>
 #endif
 
 const char* svc_strings[256] = {
@@ -26,7 +27,11 @@ const char* svc_strings[256] = {
     "svc_serverCommand",
     "svc_download",
     "svc_snapshot",
-    "svc_EOF"
+    "svc_EOF",
+    "svc_steamcommands",
+    "svc_statscommands",
+    "svc_configdata",
+    "svc_configclient"
 };
 int autoupdateStarted;
 char autoupdateFilename[64];
@@ -472,6 +477,64 @@ void __cdecl CL_ParseDownload(int localClientNum, msg_t *msg)
 }
 
 unsigned __int8 msgCompressed_buf[0x20000];
+#ifdef KISAK_COD4X
+namespace
+{
+enum class ConfigClientSequenceDisposition
+{
+    Accept,
+    DuplicateOrOld,
+    Gap,
+};
+
+constexpr ConfigClientSequenceDisposition ClassifyConfigClientSequence(
+    const int current,
+    const int incoming)
+{
+    if (incoming <= current)
+        return ConfigClientSequenceDisposition::DuplicateOrOld;
+    if (current == INT_MAX || incoming != current + 1)
+        return ConfigClientSequenceDisposition::Gap;
+    return ConfigClientSequenceDisposition::Accept;
+}
+
+static_assert(ClassifyConfigClientSequence(0, 1) == ConfigClientSequenceDisposition::Accept);
+static_assert(ClassifyConfigClientSequence(12, 12) == ConfigClientSequenceDisposition::DuplicateOrOld);
+static_assert(ClassifyConfigClientSequence(12, 11) == ConfigClientSequenceDisposition::DuplicateOrOld);
+static_assert(ClassifyConfigClientSequence(12, 14) == ConfigClientSequenceDisposition::Gap);
+static_assert(ClassifyConfigClientSequence(INT_MAX, INT_MAX) == ConfigClientSequenceDisposition::DuplicateOrOld);
+
+void CL_ParseConfigClientCod4x(msg_t *msg)
+{
+    const int sequence = MSG_ReadLong(msg);
+    const int clientNumber = MSG_ReadByte(msg);
+    MSG_ReadString(msg); // name; stock snapshots remain authoritative here
+    MSG_ReadString(msg); // clan tag
+
+    if (msg->overflowed)
+        Com_Error(ERR_DROP, "CoD4x: truncated config client update");
+    if (clientNumber < 0 || clientNumber >= 64)
+        Com_Error(ERR_DROP, "CoD4x: invalid config client %d", clientNumber);
+
+    const int current = Cod4x_GetServerConfigDataSequence();
+    switch (ClassifyConfigClientSequence(current, sequence))
+    {
+    case ConfigClientSequenceDisposition::DuplicateOrOld:
+        return;
+    case ConfigClientSequenceDisposition::Gap:
+        Com_PrintWarning(14,
+            "CoD4x: config client sequence gap (have %d, received %d)\n",
+            current, sequence);
+        return;
+    case ConfigClientSequenceDisposition::Accept:
+        Cod4x_SetServerConfigDataSequence(sequence);
+        Com_DPrintf(14, "CoD4x: accepted config client sequence %d\n", sequence);
+        return;
+    }
+}
+}
+#endif
+
 void __cdecl CL_ParseServerMessage(netsrc_t localClientNum, msg_t *msg)
 {
     msg_t msgCompressed; // [esp+4h] [ebp-30h] BYREF
@@ -540,6 +603,16 @@ void __cdecl CL_ParseServerMessage(netsrc_t localClientNum, msg_t *msg)
         case svc_snapshot:
             CL_ParseSnapshot(localClientNum, &msgCompressed);
             continue;
+        case svc_configclient:
+#ifdef KISAK_COD4X
+            if (Cod4x_UseExtendedProtocol())
+            {
+                CL_ParseConfigClientCod4x(&msgCompressed);
+                continue;
+            }
+#endif
+            // Stock protocols do not define this command.
+            [[fallthrough]];
         default:
             file = FS_FOpenFileWrite((char*)"badpacket.dat");
             if (file)

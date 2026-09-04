@@ -95,6 +95,7 @@ for (( fuzz_case = 1; fuzz_case <= fuzz_cases; ++fuzz_case )); do
         +set fs_basepath ${fuzz_data} \
         +set fs_homepath ${fuzz_home} \
         +set developer 1 \
+        +set r_fullscreen 0 \
         +set r_vsync 0 \
         +set com_maxfps 60 \
         +set g_gametype war \

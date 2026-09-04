@@ -29,6 +29,8 @@ enum svc_ops_e : __int32
     svc_download = 0x5,
     svc_snapshot = 0x6,
     svc_EOF = 0x7,
+    // CoD4x appends live client name/clan-tag cache updates to snapshots.
+    svc_configclient = 0xB,
 };
 
 struct serverAddress_t // sizeof=0x6

@@ -67,6 +67,7 @@ namespace {
 
 SDL_Window *g_window = nullptr;
 std::atomic<unsigned long long> g_requestedWindowSize{0};
+std::atomic<int> g_requestedFullscreen{-1};
 SDL_MetalView g_metalView = nullptr;
 id<NSObject> g_processActivity = nil;
 constexpr MTLPixelFormat kDrawableFormat = MTLPixelFormatBGRA8Unorm_sRGB;
@@ -3321,15 +3322,27 @@ void EncodeWorld(id<MTLRenderCommandEncoder> encoder, const GfxViewInfo &view)
     unsigned int dpvsCulledSurfaces = 0;
     unsigned int skippedSkySurfaces = 0;
     unsigned int capturedVisibilityCount = 0;
+    // Only model 0 contributes ordinary BSP camera surfaces.  Later entries in
+    // dpvs.surfaces belong to movable brush models, and the tail of model 0 can
+    // contain materials without a camera technique.  The D3D path submits the
+    // lit, decal, and emissive ranges ending at emissiveSurfsEnd, then handles
+    // brush models separately.  Drawing all world->surfaceCount entries here
+    // exposed shadow-only brush faces as the red/yellow "Shadow" tool texture.
+    const unsigned int baseWorldSurfaceCount = world->models
+        ? std::min(static_cast<unsigned int>(world->models[0].surfaceCount),
+                   static_cast<unsigned int>(world->surfaceCount))
+        : static_cast<unsigned int>(world->surfaceCount);
+    const unsigned int drawableSurfaceCount = std::min(
+        world->dpvs.emissiveSurfsEnd, baseWorldSurfaceCount);
     const unsigned char *cameraVisibility =
         R_GetCameraSurfaceVisibility(&capturedVisibilityCount);
-    if (capturedVisibilityCount != static_cast<unsigned int>(world->surfaceCount))
+    if (capturedVisibilityCount < drawableSurfaceCount)
         cameraVisibility = world->dpvs.surfaceVisData[0];
     const bool hasCameraVisibility = cameraVisibility
         && std::any_of(cameraVisibility,
-                       cameraVisibility + world->surfaceCount,
+                       cameraVisibility + drawableSurfaceCount,
                        [](const unsigned char value) { return value != 0; });
-    for (int i = 0; i < world->surfaceCount; ++i)
+    for (unsigned int i = 0; i < drawableSurfaceCount; ++i)
     {
         if (hasCameraVisibility && !cameraVisibility[i])
         {
@@ -7282,9 +7295,26 @@ void RequestWindowSize(const int width, const int height)
     g_requestedWindowSize.store(packed, std::memory_order_release);
 }
 
+void RequestWindowFullscreen(const bool fullscreen)
+{
+    g_requestedFullscreen.store(fullscreen ? 1 : 0, std::memory_order_release);
+}
+
 void UpdateWindowMainThread()
 {
-    if (!g_window || (SDL_GetWindowFlags(g_window) & SDL_WINDOW_FULLSCREEN) != 0)
+    if (!g_window)
+        return;
+
+    const int requestedFullscreen = g_requestedFullscreen.exchange(
+        -1, std::memory_order_acq_rel);
+    if (requestedFullscreen >= 0)
+    {
+        const Uint32 flags = requestedFullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0;
+        if (SDL_SetWindowFullscreen(g_window, flags) != 0)
+            std::fprintf(stderr, "SDL_SetWindowFullscreen failed: %s\n", SDL_GetError());
+    }
+
+    if ((SDL_GetWindowFlags(g_window) & SDL_WINDOW_FULLSCREEN) != 0)
         return;
     const auto packed = g_requestedWindowSize.exchange(0, std::memory_order_acq_rel);
     if (!packed)
