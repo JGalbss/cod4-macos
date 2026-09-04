@@ -5,6 +5,14 @@ The project uses semantic versioning while the port is under active development.
 
 ## Unreleased
 
+### Added
+
+- A safe local `/Applications` installer with dry-run, explicit replacement,
+  rollback, validation, and optional Dock placement.
+- Fail-closed Homebrew cask preparation that requires the final DMG to pass
+  Developer ID, hardened-runtime, notarization, Gatekeeper, checksum, bundle,
+  architecture, and corresponding-source checks.
+
 ### Changed
 
 - Replaced legacy Switch/Windows contribution templates with native Apple
@@ -14,9 +22,6 @@ The project uses semantic versioning while the port is under active development.
 
 ### Fixed
 
-- Preserved the projective screen-space coordinates used by legacy distortion
-  materials in the Metal presenter. Nearby explosion and smoke cards no longer
-  turn into oversized scene-colored polygons when their homogeneous W changes.
 - Corrected the IWI diagnostic decoder's format mapping: format `0xC` is BC2
   and format `0xD` is BC3. The tool now accepts BC1, BC2, and BC3 inputs.
 

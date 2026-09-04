@@ -509,6 +509,9 @@ enum MetalEffectFlags : uint32_t
     METAL_EFFECT_PREMULTIPLY_ALPHA = 4u,
     METAL_EFFECT_FALLOFF = 8u,
     METAL_EFFECT_FOG = 16u,
+    METAL_EFFECT_ATEST_GT_ZERO = 32u,
+    METAL_EFFECT_ATEST_LT_HALF = 64u,
+    METAL_EFFECT_ATEST_GE_HALF = 128u,
 };
 
 struct ModelSurfaceBuffers
@@ -554,6 +557,7 @@ int g_savedScreenLocalClientNum = -1;
 int g_savedScreenServerId = INT_MIN;
 int g_savedScreenLastSceneTime = INT_MIN;
 std::unordered_map<const GfxImage *, void *> g_textures;
+std::unordered_map<const GfxImage *, void *> g_linearTextures;
 std::unordered_map<const GfxImage *, void *> g_skyTextures;
 std::unordered_map<unsigned int, void *> g_materialSamplers;
 std::unordered_map<const XSurface *, ModelSurfaceBuffers> g_modelSurfaceBuffers;
@@ -626,6 +630,9 @@ void ClearLevelResourceCaches()
     for (const auto &entry : g_textures)
         ReleaseRetainedMetalObject(entry.second);
     g_textures.clear();
+    for (const auto &entry : g_linearTextures)
+        ReleaseRetainedMetalObject(entry.second);
+    g_linearTextures.clear();
     for (const auto &entry : g_skyTextures)
         ReleaseRetainedMetalObject(entry.second);
     g_skyTextures.clear();
@@ -997,7 +1004,8 @@ id<MTLTexture> TextureForSkyImage(const GfxImage *image)
     return texture;
 }
 
-id<MTLTexture> UploadFromIwi(const GfxImage *image, const TextureLayout &declared)
+id<MTLTexture> UploadFromIwi(const GfxImage *image, const TextureLayout &declared,
+                             const bool srgb)
 {
     char path[256];
     Com_sprintf(path, sizeof(path), "images/%s.iwi", image->name);
@@ -1036,20 +1044,20 @@ id<MTLTexture> UploadFromIwi(const GfxImage *image, const TextureLayout &declare
             {
                 texture = UploadTexture(image->width, image->height, layout,
                                         bytes + kIwiHeaderSize, payloadBytes,
-                                        IsSrgbImage(image), mipCount, true);
+                                        srgb, mipCount, true);
                 if (g_traceRenderer && mipCount > 1)
                 {
                     static int reportedMipChains = 0;
                     if (reportedMipChains++ < 16)
                         Com_Printf(8, "[metal] mip chain '%s': %dx%d, %d levels, %s\n",
                                    image->name ? image->name : "(unnamed)", image->width,
-                                   image->height, mipCount, IsSrgbImage(image) ? "sRGB" : "linear");
+                                   image->height, mipCount, srgb ? "sRGB" : "linear");
                 }
             }
             else
             {
                 texture = UploadTexture(image->width, image->height, layout,
-                                        bytes + levelOffset, wanted, IsSrgbImage(image));
+                                        bytes + levelOffset, wanted, srgb);
             }
         }
     }
@@ -1057,15 +1065,17 @@ id<MTLTexture> UploadFromIwi(const GfxImage *image, const TextureLayout &declare
     return texture;
 }
 
-id<MTLTexture> TextureForImage(const GfxImage *image)
+id<MTLTexture> TextureForImage(const GfxImage *image, const bool forceLinear = false)
 {
     if (!image || !image->width || !image->height)
         return nil;
-    const auto found = g_textures.find(image);
-    if (found != g_textures.end())
+    auto &cache = forceLinear ? g_linearTextures : g_textures;
+    const auto found = cache.find(image);
+    if (found != cache.end())
         return (__bridge id<MTLTexture>)found->second;
 
     id<MTLTexture> texture = nil;
+    const bool srgb = !forceLinear && IsSrgbImage(image);
     const GfxImageLoadDef *loadDef = image->texture.loadDef;
     TextureLayout layout{};
     if (loadDef && LayoutForFormat(static_cast<unsigned>(loadDef->format), &layout))
@@ -1077,16 +1087,16 @@ id<MTLTexture> TextureForImage(const GfxImage *image)
             const int mipCount = exactMipCount > 0 ? exactMipCount
                 : std::max(1, static_cast<int>(loadDef->levelCount));
             texture = UploadTexture(image->width, image->height, layout, loadDef->data,
-                                    loadDef->resourceSize, IsSrgbImage(image), mipCount);
+                                    loadDef->resourceSize, srgb, mipCount);
         }
         else
-            texture = UploadFromIwi(image, layout);
+            texture = UploadFromIwi(image, layout, srgb);
     }
 
     // Zone assets live for the process lifetime. Retain texture objects on the same
     // schedule; this also makes the cache independent of Objective-C autorelease pools.
     void *retained = texture ? (__bridge_retained void *)texture : nullptr;
-    g_textures.emplace(image, retained);
+    cache.emplace(image, retained);
     if (!texture && g_traceRenderer)
     {
         static int reportedFailures = 0;
@@ -1134,7 +1144,8 @@ id<MTLTexture> TextureForMaterial(const Material *material)
     return TextureForImage(ImageForMaterialTextureDef(material->textureTable[0]));
 }
 
-id<MTLTexture> TextureForWorldMaterial(const Material *material)
+id<MTLTexture> TextureForWorldMaterial(const Material *material,
+                                       const bool forceLinear = false)
 {
     if (!material || !material->textureTable)
         return g_whiteTexture;
@@ -1149,7 +1160,8 @@ id<MTLTexture> TextureForWorldMaterial(const Material *material)
             const MaterialTextureDef &def = material->textureTable[i];
             if (def.semantic == semantic && ImageForMaterialTextureDef(def))
             {
-                id<MTLTexture> texture = TextureForImage(ImageForMaterialTextureDef(def));
+                id<MTLTexture> texture = TextureForImage(
+                    ImageForMaterialTextureDef(def), forceLinear);
                 if (texture)
                     return texture;
             }
@@ -1648,6 +1660,20 @@ GfxStateBits EffectStateBitsForMaterial(const Material *material, const int regi
     return state;
 }
 
+MTLCullMode CullModeForStateBits(const uint32_t stateBits)
+{
+    // IW3's D3D state table uses clockwise front faces: CULL_BACK maps to
+    // D3DCULL_CCW. Metal's default front-facing winding is also clockwise,
+    // so the abstract material state maps directly to Metal's cull mode.
+    switch (stateBits & GFXS0_CULL_MASK)
+    {
+    case GFXS0_CULL_BACK: return MTLCullModeBack;
+    case GFXS0_CULL_FRONT: return MTLCullModeFront;
+    case GFXS0_CULL_NONE: return MTLCullModeNone;
+    default: return MTLCullModeNone;
+    }
+}
+
 const char *EffectPixelShaderName(const Material *material, const int region)
 {
     const MaterialTechnique *const technique = EffectTechniqueForMaterial(material, region);
@@ -1839,6 +1865,17 @@ MetalEffectParams EffectParamsForMaterial(const Material *material, const int re
         && (std::strstr(shaderName, "fog")
             || (zFeather && !std::strstr(shaderName, "_nf"))))
         params.flags |= METAL_EFFECT_FOG;
+    const uint32_t stateBits = EffectStateBitsForMaterial(material, region).loadBits[0];
+    if ((stateBits & GFXS0_ATEST_DISABLE) == 0)
+    {
+        switch (stateBits & GFXS0_ATEST_MASK)
+        {
+        case GFXS0_ATEST_GT_0: params.flags |= METAL_EFFECT_ATEST_GT_ZERO; break;
+        case GFXS0_ATEST_LT_128: params.flags |= METAL_EFFECT_ATEST_LT_HALF; break;
+        case GFXS0_ATEST_GE_128: params.flags |= METAL_EFFECT_ATEST_GE_HALF; break;
+        default: break;
+        }
+    }
     if (const float *const scale = MaterialConstant(material, kDistortionScaleHash))
     {
         params.distortionScale[0] = scale[0];
@@ -4791,9 +4828,20 @@ void EncodeCodeMeshes(id<MTLRenderCommandEncoder> encoder, const GfxViewInfo &vi
             }
             Material *const material = rgp.sortedMaterials[drawSurf.fields.materialSortedIndex];
             TraceEffectMaterial(material, region, codeMesh, mesh, firstIndex, vertexCount);
-            id<MTLTexture> texture = TextureForWorldMaterial(material);
+            const char *const effectShaderName = EffectPixelShaderName(material, region);
+            // Screen-distortion maps encode signed vectors, not color.  Several
+            // stock assets expose them through the generic TS_2D semantic, so
+            // loading them through an sRGB texture would turn neutral 0.5 into
+            // ~0.214 and impose a large one-directional offset over the entire
+            // shock-wave card.  Keep a linear view/cache only for the technique
+            // that consumes those values as vectors.
+            const bool distortion = std::strstr(effectShaderName, "distortion") != nullptr;
+            id<MTLTexture> texture = TextureForWorldMaterial(material, distortion);
+            const GfxStateBits state = EffectStateBitsForMaterial(material, region);
             SetCachedRenderPipeline(encoder,
                                     EffectPipelineForMaterial(material, region));
+            SetCachedDepthState(encoder, DepthStateForMaterial(state.loadBits[1]));
+            SetCachedCullMode(encoder, CullModeForStateBits(state.loadBits[0]));
             [encoder setFragmentTexture:texture ? texture : g_whiteTexture atIndex:0];
             [encoder setFragmentTexture:g_resolvedSceneTexture atIndex:1];
             [encoder setFragmentTexture:g_resolvedDepthTexture atIndex:2];
@@ -4916,6 +4964,7 @@ void EncodeMarkMeshes(id<MTLRenderCommandEncoder> encoder, const GfxViewInfo &vi
             SetCachedRenderPipeline(encoder, WorldPipelineForMaterial(
                 material, state.loadBits[0], false));
             SetCachedDepthState(encoder, DepthStateForMaterial(state.loadBits[1]));
+            SetCachedCullMode(encoder, CullModeForStateBits(state.loadBits[0]));
 
             // Preserve the state-map's decal offset multiplier instead of
             // applying one hard-coded bias to every mark material.
@@ -6221,6 +6270,7 @@ struct WorldOut {
     float3 tangent;
     float binormalSign;
     float clipW;
+    float clipZ;
     float4 screenLookup;
     float4 tangentClip;
     float4 bitangentClip;
@@ -6239,6 +6289,7 @@ vertex WorldOut world_vertex(const device WorldVertex *vertices [[buffer(0)]],
     out.tangent = normalize(float3(vertices[id].tangent));
     out.binormalSign = vertices[id].binormalSign;
     out.clipW = out.position.w;
+    out.clipZ = out.position.z;
     // D3D's clipSpaceLookupScale/Offset path is emitted per vertex and then
     // perspective-interpolated.  Keep that projective coordinate explicitly;
     // fragment [[position]] is a post-viewport value and is not interchangeable
@@ -6247,7 +6298,10 @@ vertex WorldOut world_vertex(const device WorldVertex *vertices [[buffer(0)]],
                               -0.5 * out.position.y + 0.5 * out.position.w,
                               0.0, out.position.w);
     out.tangentClip = viewProjection * float4(out.tangent, 0.0);
-    float3 bitangent = normalize(cross(out.normal, out.tangent)) * out.binormalSign;
+    // The packed-effect vertex shaders form this basis directly as
+    // cross(tangent, normal); the standalone binormalSign field is not part of
+    // their vertex declaration/algebra.
+    float3 bitangent = normalize(cross(out.tangent, out.normal));
     out.bitangentClip = viewProjection * float4(bitangent, 0.0);
     return out;
 }
@@ -6266,11 +6320,12 @@ vertex WorldOut model_vertex(const device WorldVertex *vertices [[buffer(0)]],
     out.tangent = normalize((model * float4(float3(vertices[id].tangent), 0.0)).xyz);
     out.binormalSign = vertices[id].binormalSign;
     out.clipW = out.position.w;
+    out.clipZ = out.position.z;
     out.screenLookup = float4(0.5 * out.position.x + 0.5 * out.position.w,
                               -0.5 * out.position.y + 0.5 * out.position.w,
                               0.0, out.position.w);
     out.tangentClip = viewProjection * float4(out.tangent, 0.0);
-    float3 bitangent = normalize(cross(out.normal, out.tangent)) * out.binormalSign;
+    float3 bitangent = normalize(cross(out.tangent, out.normal));
     out.bitangentClip = viewProjection * float4(bitangent, 0.0);
     return out;
 }
@@ -6677,20 +6732,40 @@ fragment float4 effect_fragment(WorldOut in [[stage_in]],
         float4 tangentLookup = float4(0.5 * in.tangentClip.xy,
                                      0.0, in.tangentClip.w)
                              * effect.distortionScale.x * in.color.r;
+        // This is the exact c17/c12 product emitted by
+        // distortion_scale_zfeather_dtex for cross(tangent, normal).
         float4 bitangentLookup = float4(-0.5 * in.bitangentClip.xy,
                                        0.0, -in.bitangentClip.w)
                                * effect.distortionScale.y * in.color.g;
         distortedLookup += signedDistortion.x * tangentLookup
                          + signedDistortion.y * bitangentLookup;
-        float lookupW = abs(distortedLookup.w) >= 0.000001
-            ? distortedLookup.w
-            : (distortedLookup.w < 0.0 ? -0.000001 : 0.000001);
-        float2 distortedUv = distortedLookup.xy / lookupW;
-        float distortedDepth = resolvedDepth.sample(depthSampler, distortedUv);
-        float2 chosenUv = distortedDepth + 0.000001 >= in.position.z
+        // TEXLD_PROJECT performs this divide unconditionally in the stock
+        // shader. The depth/Float-Z comparison below decides whether its
+        // result is visible at the displaced sample.
+        float2 distortedUv = distortedLookup.xy / distortedLookup.w;
+        // IW3's distortion z-feather shader does not compare hardware depth
+        // to the fragment's window-space depth. Its s5 sampler is the FLOAT_Z
+        // color target, whose build shader stores scene clip W, and v5.x is
+        // the particle's raw clip Z. Reconstruct the former from Metal's
+        // hardware depth and preserve the latter as an explicit varying.
+        float sampledDepth = resolvedDepth.sample(depthSampler, distortedUv);
+        // The retail FLOAT_Z target is cleared to the literal sentinel 1,
+        // not to far-plane clip W. Preserve that value for untouched sky.
+        float sceneFloatZ = sampledDepth >= 0.999999
+            ? 1.0 : linearEyeDepth(sampledDepth, effect);
+        float2 chosenUv = abs(sceneFloatZ) >= in.clipZ
             ? distortedUv : screenUv;
         float3 sceneColor = resolvedScene.sample(resolvedSampler, chosenUv).rgb;
-        return float4(sceneColor * in.color.rgb, distortion.a * in.color.a);
+        float alpha = distortion.a * in.color.a;
+        if (((effect.flags & 32u) != 0u && alpha <= (1.0 / 255.0))
+            || ((effect.flags & 64u) != 0u && alpha >= 0.5)
+            || ((effect.flags & 128u) != 0u && alpha < 0.5))
+            discard_fragment();
+        // The stock VS emits COLOR0 as v1.zzzw: blue is the uniform RGB
+        // intensity, while red/green independently scale the two refraction
+        // basis vectors.  Treating RGB as an ordinary tint exposes every
+        // overlapping card as a dark colored polygon.
+        return float4(sceneColor * in.color.b, alpha);
     }
 
     float4 color = tex.sample(smp, in.uv) * in.color;
@@ -6720,6 +6795,10 @@ fragment float4 effect_fragment(WorldOut in [[stage_in]],
     // material's ONE/ONE blend state. Regular alpha effects remain straight.
     if ((effect.flags & 4u) != 0u)
         color.rgb *= color.a;
+    if (((effect.flags & 32u) != 0u && color.a <= (1.0 / 255.0))
+        || ((effect.flags & 64u) != 0u && color.a >= 0.5)
+        || ((effect.flags & 128u) != 0u && color.a < 0.5))
+        discard_fragment();
     return color;
 }
 )MSL";

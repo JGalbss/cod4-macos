@@ -89,6 +89,30 @@ Mount the DMG, drag the app to `/Applications`, launch it from there, select a
 legally owned data directory, and run the smoke/regression checks. Never test
 only the app left in the build tree.
 
+For a repeatable local install, validate the DMG first with a dry run and then
+install it. The helper refuses to overwrite an existing app unless `--replace`
+is explicit; replacement preserves the prior app as
+`/Applications/jgalbs cod4.app.previous`. It never removes quarantine
+attributes, and it leaves the Dock unchanged by default.
+
+```zsh
+mac/tools/install-local-app.zsh \
+  --source dist/cod4-macos-arm64.dmg \
+  --dry-run
+mac/tools/install-local-app.zsh \
+  --source dist/cod4-macos-arm64.dmg
+```
+
+Dock placement is a separate opt-in and uses `dockutil` for the current user:
+
+```zsh
+brew install dockutil
+mac/tools/install-local-app.zsh \
+  --source dist/cod4-macos-arm64.dmg \
+  --replace \
+  --add-to-dock
+```
+
 ## 4. Developer ID and notarization gate
 
 Store notarization credentials in the Keychain with `xcrun notarytool
@@ -110,7 +134,21 @@ then runs code-signing and Gatekeeper checks. A successful command is still not
 a substitute for installing and exercising the final artifact on another
 supported Apple Silicon Mac.
 
-## 5. Prepare the signed Sparkle update
+## 5. Prepare a Homebrew cask
+
+Only after publish mode succeeds, generate a cask from the exact notarized DMG:
+
+```zsh
+mac/tools/prepare-homebrew-cask.zsh --tag v0.1.0
+```
+
+The generator verifies the checksum, stapling, Gatekeeper acceptance,
+Developer ID signature, hardened runtime, arm64 architecture, bundle metadata,
+and source notices. It rejects the current ad-hoc development package and never
+publishes anything. See the [Homebrew preparation guide](../mac/homebrew/README.md)
+for the separate tap review workflow.
+
+## 6. Prepare the signed Sparkle update
 
 Sparkle's private Ed25519 seed belongs in the login Keychain or an encrypted
 offline backup, never in Git or on the update host. Keep old archives in the
@@ -140,6 +178,12 @@ gh release edit v0.2.0 \
 
 ## Current public-binary blockers
 
+- The renderer/FX visual regression suite must pass without diagnostic code or
+  known screen-sized distortion artifacts.
+- The exact exported source revision must pass public clean-clone arm64 CI
+  before that revision is used for packaging.
+- The final DMG must pass multiplayer smoke/regression testing on a clean,
+  supported Apple Silicon Mac.
 - The release must be signed with the owner's Developer ID Application identity.
 - The final DMG must pass Apple notarization, stapling, and Gatekeeper assessment.
 - The signed Sparkle old-to-new update flow must be exercised with final assets.

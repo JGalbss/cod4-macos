@@ -86,8 +86,10 @@ The packaged application name is exactly `jgalbs cod4`. Local ad-hoc packages
 can be built for development, but no public binary should be treated as a
 release until it is signed with Developer ID, notarized by Apple, stapled,
 tested from the final DMG, and paired with the exact public GPL corresponding
-source. The remaining public-release work is credentialed Developer ID and
-notarization validation plus a production old-to-new Sparkle update test.
+source. Remaining public-release gates include renderer/FX visual acceptance,
+a green clean-clone build for the exact public source revision, final-DMG
+multiplayer testing on a clean supported Mac, credentialed Developer ID and
+notarization validation, and a production old-to-new Sparkle update test.
 
 See [Release](docs/RELEASE.md) for packaging, signing, notarization, and Sparkle
 update steps.

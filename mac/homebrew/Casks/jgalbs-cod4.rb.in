@@ -1,0 +1,21 @@
+cask "jgalbs-cod4" do
+  version "__VERSION__,__BUILD__"
+  sha256 "__SHA256__"
+
+  url "https://github.com/__REPOSITORY__/releases/download/__TAG__/cod4-macos-arm64.dmg",
+      verified: "github.com/__REPOSITORY__/"
+  name "jgalbs cod4"
+  desc "Native Apple Silicon multiplayer client for legally owned Call of Duty 4 data"
+  homepage "https://github.com/__REPOSITORY__/"
+
+  auto_updates true
+  depends_on arch: :arm64
+  depends_on macos: :sequoia
+
+  app "jgalbs cod4.app"
+
+  caveats <<~EOS
+    Requires macOS 15.5 or newer and legally owned compatible Call of Duty 4
+    game data. Retail game data is not included.
+  EOS
+end

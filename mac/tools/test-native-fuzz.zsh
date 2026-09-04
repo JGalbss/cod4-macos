@@ -10,7 +10,29 @@ fuzz_cases=${KISAK_FUZZ_CASES:-5}
 fuzz_frames=${KISAK_FUZZ_FRAMES:-1200}
 fuzz_seed=${KISAK_FUZZ_SEED:-1337}
 fuzz_artifacts=${KISAK_TEST_ARTIFACT_DIR:-$(mktemp -d /tmp/kisak-native-fuzz.XXXXXX)}
-fuzz_maps=(mp_vacant mp_crash mp_shipment mp_backlot mp_strike)
+fuzz_maps=(
+    mp_vacant
+    mp_crash
+    mp_shipment
+    mp_backlot
+    mp_strike
+    mp_bloc
+    mp_bog
+    mp_broadcast
+    mp_carentan
+    mp_cargoship
+    mp_citystreets
+    mp_convoy
+    mp_countdown
+    mp_crash_snow
+    mp_creek
+    mp_crossfire
+    mp_farm
+    mp_killhouse
+    mp_overgrown
+    mp_pipeline
+    mp_showdown
+)
 fuzz_keys=(119 97 115 100 32 99 114 118 200 201)
 
 if [[ -z ${fuzz_data} || ! -d ${fuzz_data} ]]; then

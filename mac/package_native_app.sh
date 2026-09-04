@@ -7,7 +7,7 @@ product_name="jgalbs cod4"
 executable_name="${product_name}"
 app_bundle="${product_name}.app"
 native_binary="${repo_dir}/bin/posix/${executable_name}"
-icon_source="${APP_ICON_SOURCE:-${repo_dir}/mac/assets/jgalbs-cod4-icon.png}"
+icon_source="${APP_ICON_SOURCE:-}"
 vendored_sdl2="${repo_dir}/mac/vendor/SDL2/libSDL2-2.0.0.dylib"
 vendored_sdl2_license="${repo_dir}/mac/vendor/SDL2/LICENSE.txt"
 vendored_sdl3="${repo_dir}/mac/vendor/SDL3/libSDL3.dylib"
@@ -40,9 +40,12 @@ for runtime_input in "${vendored_sdl2}" "${vendored_sdl2_license}" \
         exit 1
     fi
 done
+if [[ -z "${icon_source}" ]]; then
+    print -u2 "APP_ICON_SOURCE is required and must point to an authorized square PNG."
+    exit 1
+fi
 if [[ ! -f "${icon_source}" ]]; then
-    print -u2 "jgalbs cod4 icon not found: ${icon_source}"
-    print -u2 "Set APP_ICON_SOURCE to an authorized square PNG when packaging from the public source export."
+    print -u2 "APP_ICON_SOURCE was not found: ${icon_source}"
     exit 1
 fi
 icon_width="$(sips -g pixelWidth "${icon_source}" 2>/dev/null | awk '/pixelWidth:/ { print $2 }')"
@@ -64,7 +67,7 @@ cp "${repo_dir}/mac/Info.plist" "${stage_app}/Contents/Info.plist"
 cp "${native_binary}" "${stage_app}/Contents/MacOS/${executable_name}"
 chmod 755 "${stage_app}/Contents/MacOS/${executable_name}"
 
-# Build a complete Retina icon family from the project-owned jgalbs cod4 mark.
+# Build a complete Retina icon family from the explicitly supplied authorized image.
 # Retail game data is never copied into the application.
 iconset_dir="${stage_dir}/jgalbs-cod4.iconset"
 mkdir -p "${iconset_dir}"

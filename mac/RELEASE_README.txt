@@ -26,8 +26,9 @@ profile. Existing Favorites lists are preserved.
 Mod compatibility
 -----------------
 
-CoD4 script, IWD, fastfile, and asset mods use the normal fs_game paths. The
-New Experience server/mod is part of this build's native play test. A mod that
+The client exposes the normal fs_game paths used by CoD4 script, IWD, fastfile,
+and asset mods, but broad mod compatibility has not been established. The New
+Experience server/mod is part of the current native test scope. A mod that
 ships its own Windows-only DLL is not directly loadable by an arm64 macOS
 process and needs a native source port of that DLL.
 

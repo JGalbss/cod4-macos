@@ -222,7 +222,10 @@ required_files=(
     NOTICE
     THIRD_PARTY_NOTICES.txt
     CMakeLists.txt
+    README.md
+    docs/RELEASE.md
     src/buildnumber.h
+    src/gfx_d3d/r_drawsurf.cpp
     deps/ode/LICENSE-BSD.TXT
     deps/ode/LICENSE.TXT
     deps/speex/COPYING
@@ -234,6 +237,12 @@ required_files=(
     mac/tools/sdl-runtime-probe.c
     mac/tools/verify-bundled-sdl.zsh
     mac/tools/export-public-source.zsh
+    mac/package_native_app.sh
+    mac/RELEASE_README.txt
+    mac/tools/install-local-app.zsh
+    mac/tools/prepare-homebrew-cask.zsh
+    mac/homebrew/README.md
+    mac/homebrew/Casks/jgalbs-cod4.rb.in
 )
 for required_file in "${required_files[@]}"; do
     if [[ ! -f "${destination}/${required_file}" ]]; then

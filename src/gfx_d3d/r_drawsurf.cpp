@@ -1,6 +1,8 @@
 #include <qcommon/qcommon.h>
 #include <universal/q_shared.h>
 
+#include <cstring>
+
 #include "r_buffers.h"
 
 #include "r_drawsurf.h"
@@ -15,6 +17,83 @@
 
 static bool g_processCodeMesh;
 static bool g_processMarkMesh;
+
+// OAT preserves cross-zone asset pointers by copying reference assets into stable
+// stubs.  Material_Sort only indexes the canonical materials enumerated from the
+// database, so a copied material can still carry its fastfile default index (zero).
+// Resolve those stubs to the exact-name entry in the sorted table before encoding a
+// draw surface; otherwise an unrelated material at index zero shades the FX.
+static Material *R_GetSortedFxMaterial(Material *material)
+{
+    if (!material || !material->info.name)
+        return nullptr;
+
+    const unsigned int storedIndex = material->info.drawSurf.fields.materialSortedIndex;
+    if (storedIndex < static_cast<unsigned int>(rgp.materialCount))
+    {
+        Material *const stored = rgp.sortedMaterials[storedIndex];
+        if (stored == material
+            || (stored && stored->info.name
+                && std::strcmp(stored->info.name, material->info.name) == 0))
+        {
+            return stored;
+        }
+    }
+
+#ifdef KISAK_OAT_ZONES
+    // The native fastfile table is ordered by the same (sort key, name) pair in
+    // Posix Material_Sort.  Reference stubs are immutable while frames render, so
+    // a binary lookup avoids both a shared cache and an O(materialCount) scan for
+    // every late-zone FX batch.
+    int first = 0;
+    int last = rgp.materialCount;
+    while (first < last)
+    {
+        const int index = first + (last - first) / 2;
+        Material *const candidate = rgp.sortedMaterials[index];
+        const char *const candidateName = candidate && candidate->info.name
+            ? candidate->info.name : "";
+        const int nameOrder = std::strcmp(candidateName, material->info.name);
+        if (candidate->info.sortKey < material->info.sortKey
+            || (candidate->info.sortKey == material->info.sortKey && nameOrder < 0))
+        {
+            first = index + 1;
+        }
+        else
+        {
+            last = index;
+        }
+    }
+    if (first < rgp.materialCount)
+    {
+        Material *const candidate = rgp.sortedMaterials[first];
+        if (candidate && candidate->info.name
+            && candidate->info.sortKey == material->info.sortKey
+            && std::strcmp(candidate->info.name, material->info.name) == 0)
+        {
+            return candidate;
+        }
+    }
+#else
+    for (int index = 0; index < rgp.materialCount; ++index)
+    {
+        Material *const candidate = rgp.sortedMaterials[index];
+        if (candidate && candidate->info.name
+            && std::strcmp(candidate->info.name, material->info.name) == 0)
+        {
+            return candidate;
+        }
+    }
+#endif
+
+    static volatile LONG unresolvedWarningCount;
+    if (InterlockedIncrement(&unresolvedWarningCount) <= 32)
+    {
+        Com_PrintError(8, "ERROR: FX material '%s' is absent from the sorted material table\n",
+                       material->info.name);
+    }
+    return nullptr;
+}
 
 char __cdecl R_ReserveCodeMeshIndices(int indexCount, r_double_index_t** indicesOut)
 {
@@ -96,6 +175,9 @@ void __cdecl R_AddCodeMeshDrawSurf(
 
     iassert(indexCount);
     iassert(g_processCodeMesh);
+    material = R_GetSortedFxMaterial(material);
+    if (!material)
+        return;
     iassert(rgp.sortedMaterials[material->info.drawSurf.fields.materialSortedIndex] == material);
 
 #ifdef KISAK_METAL
@@ -249,6 +331,9 @@ void __cdecl R_AddMarkMeshDrawSurf(
     [[maybe_unused]] FxMarkMeshData *markMesh; // [esp+50h] [ebp-4h]
 
     iassert(g_processMarkMesh);
+    material = R_GetSortedFxMaterial(material);
+    if (!material)
+        return;
     iassert(rgp.sortedMaterials[material->info.drawSurf.fields.materialSortedIndex] == material);
 #ifdef KISAK_METAL
     // Marks are shaded natively as well, so their D3D9 lightmap-technique slot is
@@ -566,6 +651,9 @@ char __cdecl R_AddParticleCloudDrawSurf(unsigned int cloudIndex, Material *mater
             cloudIndex,
             frontEndDataOut->cloudCount);
 
+    material = R_GetSortedFxMaterial(material);
+    if (!material)
+        return 0;
     iassert(rgp.sortedMaterials[material->info.drawSurf.fields.materialSortedIndex] == material);
 
 #ifdef KISAK_METAL
