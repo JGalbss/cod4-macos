@@ -69,9 +69,8 @@ file 'bin/posix/jgalbs cod4'
 ## 3. Build a local package
 
 With no signing variables, the script produces an ad-hoc-signed development
-bundle. It embeds runtime libraries, removes build-machine dependency and
-compiler paths, adds license/source notices, creates the DMG, and writes its
-checksum.
+bundle. It embeds runtime libraries, removes build-machine Homebrew paths,
+adds license/source notices, creates the DMG, and writes its checksum.
 Development packages keep manual **Check for Updates…** available but disable
 scheduled checks so they do not poll a production feed before one is live.
 The public source export intentionally has no application mark: provide a
@@ -143,7 +142,7 @@ Only after publish mode succeeds, generate a cask from the exact notarized DMG:
 
 ```zsh
 mac/tools/prepare-homebrew-cask.zsh \
-  --tag v0.2.2 \
+  --tag v0.2.4 \
   --source-sha "${RELEASE_REVISION}"
 ```
 
@@ -164,13 +163,13 @@ After the notarized DMG exists:
 
 ```zsh
 GITHUB_REPOSITORY=JGalbss/cod4-macos \
-RELEASE_TAG=v0.2.2 \
+RELEASE_TAG=v0.2.4 \
 RELEASE_SOURCE_SHA="${RELEASE_REVISION}" \
-RELEASE_NOTES=docs/RELEASE_NOTES_v0.2.2.md \
+RELEASE_NOTES=docs/RELEASE_NOTES_v0.2.4.md \
 mac/updater/prepare_update_release.zsh
 
 RELEASE_SOURCE_SHA="${RELEASE_REVISION}" \
-  mac/updater/publish_github_release.zsh JGalbss/cod4-macos v0.2.2
+  mac/updater/publish_github_release.zsh JGalbss/cod4-macos v0.2.4
 ```
 
 The publisher creates or updates a draft and verifies its assets. Draft assets
@@ -182,7 +181,7 @@ staging update installs, relaunches, preserves external data/profile state, and
 passes a multiplayer join/quit smoke test, promote the draft:
 
 ```zsh
-gh release edit v0.2.2 \
+gh release edit v0.2.4 \
   --repo JGalbss/cod4-macos \
   --draft=false \
   --latest

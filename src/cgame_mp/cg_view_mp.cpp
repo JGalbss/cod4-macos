@@ -1328,7 +1328,7 @@ int32_t __cdecl CG_DrawActiveFrame(
     FxCmd fxUpdateCmd; // [esp+5Ch] [ebp-18h] BYREF
     int32_t viewlocked_entNum; // [esp+68h] [ebp-Ch]
     [[maybe_unused]] const cgs_t* cgs; // [esp+6Ch] [ebp-8h]
-    [[maybe_unused]] int32_t prevState; // [esp+70h] [ebp-4h]
+    int32_t prevState; // [esp+70h] [ebp-4h]
     cg_s *cgameGlob;
 
     prevState = 0;
@@ -1364,6 +1364,25 @@ int32_t __cdecl CG_DrawActiveFrame(
     if (cgameGlob->snap)
         prevState = cgameGlob->snap->ps.pm_type;
     CG_ProcessSnapshots(localClientNum);
+    const bool enteringIntermission = cgameGlob->nextSnap
+        && prevState != PM_INTERMISSION
+        && cgameGlob->nextSnap->ps.pm_type == PM_INTERMISSION;
+    const bool showingMatchOutcome = !I_stricmp(cgameGlob->visionNameNaked, "mpoutro");
+    if (enteringIntermission)
+    {
+        CG_CloseScriptMenu(localClientNum, false);
+        UI_CloseAllMenus(localClientNum);
+    }
+    if (enteringIntermission || showingMatchOutcome)
+    {
+        // The stock outcome HUD begins when mpoutro starts, several seconds
+        // before the player enters PM_INTERMISSION. Center prints and objective
+        // text are client-timed, so suppress them throughout that interval rather
+        // than letting spawn/kill text overlap the authoritative final result.
+        CG_ClearCenterPrint(localClientNum);
+        cgameGlob->cursorHintFade = 0;
+        cgameGlob->objectiveText[0] = 0;
+    }
     if (cgameGlob->renderScreen)
     {
         if (cgameGlob->nextSnap && (cgameGlob->nextSnap->snapFlags & 2) == 0)

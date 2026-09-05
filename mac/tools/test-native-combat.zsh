@@ -48,6 +48,7 @@ mkdir -p ${combat_host_home} ${combat_guest_home}
 combat_host_commands=
 combat_guest_commands=
 combat_fire_keys=
+combat_skip_killcam_keys=
 for (( combat_cycle = 0; combat_cycle < combat_cycles; ++combat_cycle )); do
     combat_base_frame=$((100 + combat_cycle * 600))
     combat_separator=
@@ -57,6 +58,18 @@ for (( combat_cycle = 0; combat_cycle < combat_cycles; ++combat_cycle )); do
     combat_host_commands+="${combat_separator}-${combat_base_frame},setviewpos 1408 248 72 180 0"
     combat_guest_commands+="${combat_separator}-${combat_base_frame},setviewpos 1280 248 72 0 0"
     combat_fire_keys+="${combat_separator}200,-$((combat_base_frame + 40)),3;200,-$((combat_base_frame + 100)),3;200,-$((combat_base_frame + 160)),3;200,-$((combat_base_frame + 220)),3;114,-$((combat_base_frame + 280)),3"
+    # F is the stock +activate binding. Press it shortly after the lethal burst
+    # so the test exercises the real client input and server killcam-skip path.
+    # Keep pulsing through the valid skip window. Renderer/network load can
+    # move the authoritative death snapshot relative to the local playable
+    # frame, so three early presses made this gate timing-dependent even when
+    # the real F/+activate path was healthy.
+    for combat_skip_offset in 300 340 380 420 460 500 540; do
+        if [[ -n ${combat_skip_killcam_keys} ]]; then
+            combat_skip_killcam_keys+=';'
+        fi
+        combat_skip_killcam_keys+="102,-$((combat_base_frame + combat_skip_offset)),3"
+    done
 done
 combat_host_quit_frame=$((combat_cycles * 600 + 300))
 combat_guest_quit_frame=$((combat_host_quit_frame - 100))
@@ -105,6 +118,7 @@ KISAK_METAL_AUTO_JOIN=1 \
 KISAK_METAL_DUMP=${combat_victim_ppm} \
 KISAK_METAL_DUMP_FRAME=-350 \
 KISAK_AUTOCMD=${combat_guest_commands} \
+KISAK_AUTOKEY=${combat_skip_killcam_keys} \
 ${combat_binary} \
     +set fs_basepath ${combat_data} \
     +set fs_homepath ${combat_guest_home} \
@@ -151,6 +165,25 @@ check_native_combat "victim entered every killcam" \
     awk -v want=${combat_cycles} '/\[gameplay\] killcam entered: .*target=0/{++count} END { exit count < want }' ${combat_guest_log}
 check_native_combat "victim exited every killcam" \
     awk -v want=${combat_cycles} '/\[gameplay\] killcam exited:/{++count} END { exit count < want }' ${combat_guest_log}
+check_native_combat "F/+activate skips every killcam promptly" \
+    awk -v want=${combat_cycles} '
+        /\[gameplay\] killcam entered:/ {
+            if (match($0, /serverTime=[0-9]+/)) {
+                entered = substr($0, RSTART + 11, RLENGTH - 11) + 0
+            }
+            next
+        }
+        /\[gameplay\] killcam exited:/ && entered {
+            if (match($0, /serverTime=[0-9]+/)) {
+                exited = substr($0, RSTART + 11, RLENGTH - 11) + 0
+                if (exited - entered < 4000) {
+                    ++skipped
+                }
+            }
+            entered = 0
+        }
+        END { exit skipped < want }
+    ' ${combat_guest_log}
 check_native_combat "victim respawned at full health after every death" \
     awk -v want=${combat_cycles} '/\[combat-test\] death victim=1/{dead=1; next} dead && /\[combat-test\] state client=1 connected=2 session=0 pm=0 health=100/{++respawns; dead=0} END { exit respawns < want }' ${combat_host_log}
 check_native_combat "no native fatal/assert path" \

@@ -1949,9 +1949,9 @@ void __cdecl R_SetFilmInfo(GfxViewInfo *viewInfo, const GfxSceneParms *sceneParm
         //viewInfo->film.tintLight[0] = *(float *)(LODWORD(r_lightTweakSunDirection.vector[1]) + 12);
         //viewInfo->film.tintLight[1] = *(float *)(v3 + 4);
         //viewInfo->film.tintLight[2] = *(float *)(v3 + 8);
-        viewInfo->film.tintLight[0] = r_lightTweakSunDirection->current.vector[0];
-        viewInfo->film.tintLight[1] = r_lightTweakSunDirection->current.vector[1];
-        viewInfo->film.tintLight[2] = r_lightTweakSunDirection->current.vector[2];
+		viewInfo->film.tintLight[0] = r_filmTweakLightTint->current.vector[0];
+		viewInfo->film.tintLight[1] = r_filmTweakLightTint->current.vector[1];
+		viewInfo->film.tintLight[2] = r_filmTweakLightTint->current.vector[2];
         p_current = &r_filmTweakDarkTint->current;
         viewInfo->film.tintDark[0] = r_filmTweakDarkTint->current.value;
         viewInfo->film.tintDark[1] = p_current->vector[1];

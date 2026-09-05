@@ -276,9 +276,9 @@ else:
     sys.exit("ending.gsx: flythrough budget changed upstream, patch by hand")
 PY
 
-# RCON-backed player progression for the private control panel. This calls the
-# mod's real promotion/unlock functions, including stat 200 (Create-a-Class),
-# rather than changing only the rank number shown on the scoreboard.
+# RCON-backed player administration for the private control panel. Progression
+# calls the mod's real promotion/unlock functions, while the session-only admin
+# powers remain unreachable from ordinary player chat commands.
 python3 "$SCRIPT_DIR/patch-progression.py" "$MOD_DIR"
 
 echo "==> tuning the mod"

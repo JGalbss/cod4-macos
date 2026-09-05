@@ -7,6 +7,7 @@
 
 #include <client_mp/client_mp.h>
 #include <qcommon/cmd.h>
+#include <qcommon/dl_main.h>
 #include <qcommon/qcommon.h>
 #include <universal/com_files.h>
 #include <win32/win_storage.h>
@@ -51,6 +52,18 @@ int serverConfigDataSequence;
 int connectionProtocol = 1;
 std::unordered_map<uint64_t, int> advertisedServerProtocols;
 
+constexpr int kMaxProtocolClients = 64;
+constexpr int kProtocolClientNameSize = 33;
+constexpr int kProtocolClanTagSize = 13;
+
+struct ProtocolClientData
+{
+    char name[kProtocolClientNameSize];
+    char clanTag[kProtocolClanTagSize];
+};
+
+std::array<ProtocolClientData, kMaxProtocolClients> protocolClientData;
+
 constexpr int kDownloadNameSize = 64;
 constexpr int kDownloadChecksumCount = 256;
 constexpr int kDownloadChecksumWireSize =
@@ -76,6 +89,9 @@ enum DownloadClientCommand
     CLC_STOPDOWNLOAD = 2,
     CLC_REQUESTDLBLOCKS = 3,
     CLC_WWWDLFAIL = 4,
+    CLC_WWWDLDONE = 5,
+    CLC_WWWDLBBL8R = 6,
+    CLC_WWWDLCHKFAIL = 7,
 };
 
 struct DownloadState
@@ -85,6 +101,9 @@ struct DownloadState
     uint32_t expectedChecksum;
     uint32_t checksum;
     char requestedName[kDownloadNameSize];
+    bool httpActive;
+    bool httpDisconnected;
+    char httpTempPath[260];
 };
 
 DownloadState downloadState;
@@ -250,6 +269,80 @@ bool RequestNextDownloadRange()
     downloadState.requestedEnd = cls.downloadCount + requestSize;
     return SendDownloadCommand(
         CLC_REQUESTDLBLOCKS, nullptr, cls.downloadCount, requestSize);
+}
+
+bool BuildDownloadOsPath(const char *virtualPath, char *output, const size_t outputSize)
+{
+    if (!virtualPath || !*virtualPath || !output || outputSize < 2)
+        return false;
+
+    char path[260];
+    FS_BuildOSPath(fs_homepath->current.string, virtualPath, "", path);
+    const size_t length = std::strlen(path);
+    if (!length || length >= outputSize)
+        return false;
+    if (path[length - 1] == '/' || path[length - 1] == '\\')
+        path[length - 1] = '\0';
+    I_strncpyz(output, path, static_cast<int>(outputSize));
+    return output[0] != '\0';
+}
+
+bool ReadDownloadedFile(const char *path, uint32_t *checksum, int *size)
+{
+    if (!path || !*path || !checksum || !size)
+        return false;
+
+    FILE *file = std::fopen(path, "rb");
+    if (!file)
+        return false;
+
+    uint32_t crc = 0;
+    int total = 0;
+    std::array<unsigned char, 64 * 1024> buffer{};
+    while (true)
+    {
+        const size_t bytesRead = std::fread(buffer.data(), 1, buffer.size(), file);
+        if (bytesRead)
+        {
+            if (bytesRead > static_cast<size_t>(kMaxDownloadSize - total))
+            {
+                std::fclose(file);
+                return false;
+            }
+            crc = UpdateCrc32(crc, buffer.data(), bytesRead);
+            total += static_cast<int>(bytesRead);
+        }
+        if (bytesRead != buffer.size())
+        {
+            const bool ok = std::feof(file) && !std::ferror(file);
+            std::fclose(file);
+            if (!ok)
+                return false;
+            *checksum = crc;
+            *size = total;
+            return true;
+        }
+    }
+}
+
+void FallBackFromHttpDownload(const DownloadClientCommand command, const char *message)
+{
+    downloadState.initialized = false;
+    downloadState.requestedEnd = 0;
+    downloadState.httpActive = false;
+    downloadState.httpDisconnected = false;
+    downloadState.httpTempPath[0] = '\0';
+    cls.downloadCount = 0;
+    cls.wwwDlInProgress = 0;
+    cls.wwwDlDisconnected = 0;
+    legacyHacks.cl_downloadCount = 0;
+    if (!SendDownloadCommand(command))
+    {
+        downloadState = {};
+        Com_Error(ERR_DROP, "CoD4x: could not report HTTP download failure");
+        return;
+    }
+    Com_PrintWarning(14, "%s; requesting checksummed server download\n", message);
 }
 
 void FinishDownload()
@@ -434,21 +527,37 @@ void ParseDownloadRedirect(msg_t *msg)
         return;
     }
 
-    // The stock asynchronous HTTP path reports completion with textual IW3
-    // commands.  Ask a protocol-21 server to use its direct, checksummed path
-    // instead until that path has binary completion reporting end to end.
     CloseDownloadFile();
-    downloadState.initialized = false;
     downloadState.requestedEnd = 0;
     cls.downloadCount = 0;
     legacyHacks.cl_downloadCount = 0;
-    if (!SendDownloadCommand(CLC_WWWDLFAIL))
+
+    if (!BuildDownloadOsPath(
+            cls.downloadTempName,
+            downloadState.httpTempPath,
+            sizeof(downloadState.httpTempPath))
+        || !DL_BeginDownload(downloadState.httpTempPath, url))
     {
-        downloadState = {};
-        Com_Error(ERR_DROP, "CoD4x: could not decline HTTP download redirect");
+        FallBackFromHttpDownload(
+            CLC_WWWDLFAIL, "CoD4x: could not start the HTTP redirect");
         return;
     }
-    Com_Printf(14, "CoD4x: declined HTTP redirect; requesting checksummed server download\n");
+
+    downloadState.httpActive = true;
+    downloadState.httpDisconnected = disconnect != 0;
+    cls.wwwDlInProgress = 1;
+    cls.wwwDlDisconnected = disconnect;
+    if (downloadState.httpDisconnected && !SendDownloadCommand(CLC_WWWDLBBL8R))
+    {
+        DL_CancelDownload();
+        downloadState = {};
+        cls.wwwDlInProgress = 0;
+        cls.wwwDlDisconnected = 0;
+        Com_Error(ERR_DROP, "CoD4x: could not acknowledge disconnected HTTP download");
+        return;
+    }
+    Com_Printf(14, "CoD4x: accepted HTTP redirect for %s (%d bytes)\n",
+        downloadState.requestedName, fileSize);
 }
 
 void ParseDownloadFailure(msg_t *msg)
@@ -945,6 +1054,7 @@ void Cod4x_BeginConnection(const netadr_t &address)
 {
     extendedProtocol = false;
     connectionProtocol = 1;
+    Cod4x_ClearClientData();
     if (!Cod4x_IsEnabled() || NET_IsLocalAddress(address))
         return;
 
@@ -967,6 +1077,38 @@ int Cod4x_GetServerConfigDataSequence()
 void Cod4x_SetServerConfigDataSequence(const int sequence)
 {
     serverConfigDataSequence = sequence;
+}
+
+void Cod4x_ClearClientData()
+{
+    protocolClientData = {};
+}
+
+void Cod4x_SetClientData(
+    const int clientNumber,
+    const char *name,
+    const char *clanTag)
+{
+    if (clientNumber < 0 || clientNumber >= kMaxProtocolClients)
+        return;
+
+    ProtocolClientData &client = protocolClientData[clientNumber];
+    I_strncpyz(client.name, name ? name : "", sizeof(client.name));
+    I_strncpyz(client.clanTag, clanTag ? clanTag : "", sizeof(client.clanTag));
+}
+
+const char *Cod4x_GetClientName(const int clientNumber)
+{
+    if (clientNumber < 0 || clientNumber >= kMaxProtocolClients)
+        return "";
+    return protocolClientData[clientNumber].name;
+}
+
+const char *Cod4x_GetClientClanTag(const int clientNumber)
+{
+    if (clientNumber < 0 || clientNumber >= kMaxProtocolClients)
+        return "";
+    return protocolClientData[clientNumber].clanTag;
 }
 
 void Cod4x_ExecuteReliableMessage(msg_t *msg)
@@ -1050,6 +1192,79 @@ void Cod4x_ReportDownloadComplete()
         Com_Error(ERR_DROP, "CoD4x: could not report download completion");
         return;
     }
+}
+
+bool Cod4x_HandleWWWDownloadResult(const bool succeeded)
+{
+    if (!downloadState.httpActive)
+        return false;
+
+    downloadState.httpActive = false;
+    cls.wwwDlInProgress = 0;
+    if (!succeeded)
+    {
+        if (downloadState.httpDisconnected)
+        {
+            downloadState = {};
+            cls.wwwDlDisconnected = 0;
+            CL_ClearStaticDownload();
+            Com_Error(ERR_DROP, "CoD4x: HTTP download failed after disconnecting");
+            return true;
+        }
+        FallBackFromHttpDownload(CLC_WWWDLFAIL, "CoD4x: HTTP download failed");
+        return true;
+    }
+
+    uint32_t checksum = 0;
+    int size = 0;
+    if (!ReadDownloadedFile(downloadState.httpTempPath, &checksum, &size)
+        || size != cls.downloadSize
+        || checksum != downloadState.expectedChecksum)
+    {
+        std::remove(downloadState.httpTempPath);
+        if (downloadState.httpDisconnected)
+        {
+            downloadState = {};
+            cls.wwwDlDisconnected = 0;
+            CL_ClearStaticDownload();
+            Com_Error(ERR_DROP, "CoD4x: redirected download failed verification");
+            return true;
+        }
+        FallBackFromHttpDownload(
+            CLC_WWWDLCHKFAIL, "CoD4x: redirected download failed verification");
+        return true;
+    }
+
+    cls.downloadCount = size;
+    legacyHacks.cl_downloadCount = size;
+    FS_SV_Rename(cls.downloadTempName, cls.downloadName);
+    if (!FS_SV_FileExists(cls.downloadName))
+    {
+        downloadState = {};
+        cls.wwwDlDisconnected = 0;
+        Com_Error(ERR_DROP, "CoD4x: could not install redirected file %s", cls.downloadName);
+        return true;
+    }
+
+    const bool disconnected = downloadState.httpDisconnected;
+    Com_Printf(14, "CoD4x: HTTP download complete: %s (%d bytes, checksum %08x)\n",
+        cls.downloadName, size, checksum);
+    downloadState = {};
+    cls.downloadName[0] = '\0';
+    cls.downloadTempName[0] = '\0';
+    cls.wwwDlDisconnected = 0;
+    legacyHacks.cl_downloadName[0] = '\0';
+    if (disconnected)
+    {
+        Cbuf_AddText(0, "reconnect\n");
+    }
+    else if (!SendDownloadCommand(CLC_WWWDLDONE))
+    {
+        Com_Error(ERR_DROP, "CoD4x: could not report HTTP download completion");
+        return true;
+    }
+    CL_NextDownload(NS_CLIENT1);
+    return true;
 }
 
 const char *Cod4x_GetGuid()

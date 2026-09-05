@@ -683,6 +683,7 @@ double __cdecl CG_DrawClientScore(
     const ScreenPlacement *scrPlace; // [esp+ECh] [ebp-50h]
     cg_s *cgameGlob; // [esp+F0h] [ebp-4Ch]
     const char *string; // [esp+F4h] [ebp-48h]
+    char clientName[33];
     Material *material; // [esp+F8h] [ebp-44h]
     float xAdj; // [esp+FCh] [ebp-40h]
     float textColor[4]; // [esp+100h] [ebp-3Ch] BYREF
@@ -733,7 +734,10 @@ double __cdecl CG_DrawClientScore(
         switch (info[i].type)
         {
         case LCT_NAME:
-            string = ci->name;
+            if (CL_GetClientName(localClientNum, score->client, clientName, sizeof(clientName)))
+                string = clientName;
+            else
+                string = ci->name;
             v23 = CG_BannerScoreboardScaleMultiplier() * 0.3499999940395355;
             DrawListString(localClientNum, (char *)string, x, y, w, info[i].iAlignment, listFont, v23, 3, textColor);
             break;
@@ -1345,4 +1349,3 @@ bool __cdecl Scoreboard_HandleInput(int32_t localClientNum, int32_t key)
     }
     return result;
 }
-

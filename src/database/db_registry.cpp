@@ -604,17 +604,36 @@ void __cdecl DB_BuildOSPath_Mod(const char *zoneName, uint32_t size, char *filen
 #endif
 }
 
-static void DB_BuildOSPath_UserMap(const char *zoneName, uint32_t size, char *filename)
+static const char *DB_UserMapHomePath()
+{
+    if (fs_homepath && fs_homepath->current.string && *fs_homepath->current.string)
+        return fs_homepath->current.string;
+    return Sys_DefaultInstallPath();
+}
+
+static const char *DB_UserMapBasePath()
+{
+    if (fs_basepath && fs_basepath->current.string && *fs_basepath->current.string)
+        return fs_basepath->current.string;
+    return Sys_DefaultInstallPath();
+}
+
+static void DB_BuildOSPath_UserMapAtPath(const char *rootPath, const char *zoneName, uint32_t size, char *filename)
 {
     char mapName[64];
     I_strncpyz(mapName, zoneName, sizeof(mapName));
     if (char *loadSuffix = strstr(mapName, "_load"))
         *loadSuffix = 0;
 #if defined(_WIN32)
-    Com_sprintf(filename, size, "%s\\usermaps\\%s\\%s.ff", Sys_DefaultInstallPath(), mapName, zoneName);
+    Com_sprintf(filename, size, "%s\\usermaps\\%s\\%s.ff", rootPath, mapName, zoneName);
 #else
-    Com_sprintf(filename, size, "%s/usermaps/%s/%s.ff", Sys_DefaultInstallPath(), mapName, zoneName);
+    Com_sprintf(filename, size, "%s/usermaps/%s/%s.ff", rootPath, mapName, zoneName);
 #endif
+}
+
+static void DB_BuildOSPath_UserMap(const char *zoneName, uint32_t size, char *filename)
+{
+    DB_BuildOSPath_UserMapAtPath(DB_UserMapHomePath(), zoneName, size, filename);
 }
 
 bool __cdecl DB_ModFileExists()
@@ -2780,6 +2799,13 @@ int32_t __cdecl DB_TryLoadXFileInternal(char *zoneName, int32_t zoneFlags)
         {
             DB_BuildOSPath_UserMap(zoneName, 256, filename);
             zoneFile = try_open(filename);
+            const char *homePath = DB_UserMapHomePath();
+            const char *basePath = DB_UserMapBasePath();
+            if (!zoneFile && I_stricmp(homePath, basePath))
+            {
+                DB_BuildOSPath_UserMapAtPath(basePath, zoneName, 256, filename);
+                zoneFile = try_open(filename);
+            }
         }
     }
     else
@@ -3397,6 +3423,16 @@ int32_t __cdecl DB_FileSize(const char *zoneName, int32_t isMod)
     // KISAKHACK-AUDIT(db-filesize-posix): swap CreateFileA/GetFileSize for
     // stdio fseek/ftell.
     FILE *fp = std::fopen(filename, "rb");
+    if (!fp && isMod == 2)
+    {
+        const char *homePath = DB_UserMapHomePath();
+        const char *basePath = DB_UserMapBasePath();
+        if (I_stricmp(homePath, basePath))
+        {
+            DB_BuildOSPath_UserMapAtPath(basePath, zoneName, sizeof(filename), filename);
+            fp = std::fopen(filename, "rb");
+        }
+    }
     if (!fp) return 0;
     std::fseek(fp, 0, SEEK_END);
     size = (int32_t)std::ftell(fp);

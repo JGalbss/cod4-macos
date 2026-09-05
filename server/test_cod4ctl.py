@@ -83,8 +83,14 @@ num score ping playerid            steamid           name                       
         self.assertEqual(cod4ctl.validate_message(" hello\nthere "), "hello there")
         self.assertEqual(cod4ctl.validate_slot("3"), 3)
         self.assertEqual(cod4ctl.validate_level("55"), 55)
+        self.assertEqual(cod4ctl.validate_player_power("AIMBOT"), "aimbot")
+        self.assertEqual(cod4ctl.validate_toggle("on"), "on")
         with self.assertRaises(cod4ctl.ControlError):
             cod4ctl.validate_level("56")
+        with self.assertRaises(cod4ctl.ControlError):
+            cod4ctl.validate_player_power("noclip;quit")
+        with self.assertRaises(cod4ctl.ControlError):
+            cod4ctl.validate_toggle("toggle")
         for value in ("mp-crash", "../main", "mp_crash;quit"):
             with self.assertRaises(cod4ctl.ControlError):
                 cod4ctl.validate_map(value)
@@ -111,6 +117,23 @@ class ControllerTests(unittest.TestCase):
         )
         with self.assertRaises(cod4ctl.ControlError):
             controller.player_progression(200, "max")
+
+    def test_player_power_commands_are_allowlisted(self):
+        connection = self.FakeConnection()
+        controller = cod4ctl.Controller(connection, ())
+        controller.player_power(3, "godmode", "on")
+        controller.player_power(3, "aimbot", "off")
+        controller.player_power(3, "wallhack", "on")
+        self.assertEqual(
+            connection.commands,
+            [
+                "cmd adminpower:3:godmode_on",
+                "cmd adminpower:3:aimbot_off",
+                "cmd adminpower:3:wallhack_on",
+            ],
+        )
+        with self.assertRaises(cod4ctl.ControlError):
+            controller.player_power(3, "godmode;quit", "on")
 
 
 if __name__ == "__main__":

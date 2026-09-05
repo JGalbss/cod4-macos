@@ -442,9 +442,19 @@ void __cdecl CG_Draw2dHudElems(int32_t localClientNum, int32_t foreground)
     if (SortedHudElems)
     {
         v2 = cgameGlob->nextSnap->ps.pm_type < PM_DEAD;
+#ifdef KISAK_MP
+        // The persistent spawn/team notification elements opt into
+        // hideWhenInMenu, while the authoritative match-outcome elements do
+        // not. The stock scripts begin mpoutro before PM_INTERMISSION and can
+        // otherwise leave the old team objective underneath the final result.
+        const bool showingMatchOutcome = !I_stricmp(cgameGlob->visionNameNaked, "mpoutro");
+#else
+        const bool showingMatchOutcome = false;
+#endif
         for (i = 0; i < SortedHudElems; ++i)
         {
-            if ((v2 || (elems[i]->flags & 2) == 0)
+            if ((!showingMatchOutcome || (elems[i]->flags & 4) == 0)
+                && (v2 || (elems[i]->flags & 2) == 0)
                 && (!foreground || (elems[i]->flags & 1) != 0)
                 && (foreground || (elems[i]->flags & 1) == 0)
                 && ((elems[i]->flags & 4) == 0 || !UI_AnyMenuVisible(localClientNum)))
@@ -603,10 +613,7 @@ void __cdecl GetHudElemInfo(int32_t localClientNum, const hudelem_s *elem, cg_hu
     case HE_TYPE_PLAYERNAME:
         namedClientIndex = SnapFloatToInt(elem->value);
         if (namedClientIndex < 0x40)
-            I_strncpyz(
-                cghe->hudElemText,
-                CG_GetLocalClientGlobals(localClientNum)->bgs.clientinfo[namedClientIndex].name,
-                256);
+            CL_GetClientName(localClientNum, namedClientIndex, cghe->hudElemText, 256);
         break;
     case HE_TYPE_MAPNAME:
         I_strncpyz(cghe->hudElemText, CL_GetConfigString(localClientNum, 0x11), 256);

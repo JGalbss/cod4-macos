@@ -254,3 +254,31 @@ stapled DMG and an install/update test from the downloaded final bytes.
 
 Treat regressions, crashes, assertions, red-screen diagnostics, and rendering
 artifacts as release blockers even if a narrower automated check passes.
+
+## 0.2.4 release-candidate evidence
+
+- Raw arm64 executable SHA-256:
+  `ef7c893c37312b12bff0199aec623fba69151d63707c5e094f0b61300e3f291d`.
+- Two-client combat, killcam skip, respawn, and resolved player-name test:
+  `/tmp/kisak-native-combat.uPzAIa`.
+- Live protocol-21 join, initial client-name cache, snapshot, and clean
+  connection test: `/tmp/kisak-native-cod4x-join.wsd4i7`.
+- Real score-limit end-state color and overlay test:
+  `/tmp/cod4-outcome-hud-fixed.n2iyLq`.
+- Real airstrike parent/impact FX test:
+  `/tmp/kisak-native-airstrike.CCSJOv`.
+
+## 0.2.1 focused regression evidence
+
+- The exact post-LP64-fix raw executable SHA-256 is
+  `bd05e3552de2b5f43e1ca1628f8f61911a71dbe3cad9f46a10182528da5fa863`.
+  It loaded the custom `mp_mw2_term` map into active gameplay for 600 frames,
+  selected authored urban SAS/Russian teams, rendered the map compass from its
+  usermap IWD, and quit normally with an empty fatal/error scan. Evidence is in
+  `/tmp/cod4-terminal-exact.XtzFqV`.
+- That same exact executable passed a 300-frame deterministic stock
+  `mp_vacant` regression with seed `20260904`; evidence is in
+  `/tmp/cod4-final-stock-regression`.
+- A focused arm64 pointer-width audit found and fixed an active listen-server
+  skeleton-memory alignment expression that narrowed an address through
+  `unsigned int`.

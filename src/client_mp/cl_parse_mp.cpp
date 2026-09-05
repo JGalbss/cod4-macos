@@ -508,8 +508,10 @@ void CL_ParseConfigClientCod4x(msg_t *msg)
 {
     const int sequence = MSG_ReadLong(msg);
     const int clientNumber = MSG_ReadByte(msg);
-    MSG_ReadString(msg); // name; stock snapshots remain authoritative here
-    MSG_ReadString(msg); // clan tag
+    char name[33];
+    char clanTag[13];
+    I_strncpyz(name, MSG_ReadString(msg), sizeof(name));
+    I_strncpyz(clanTag, MSG_ReadString(msg), sizeof(clanTag));
 
     if (msg->overflowed)
         Com_Error(ERR_DROP, "CoD4x: truncated config client update");
@@ -528,6 +530,7 @@ void CL_ParseConfigClientCod4x(msg_t *msg)
         return;
     case ConfigClientSequenceDisposition::Accept:
         Cod4x_SetServerConfigDataSequence(sequence);
+        Cod4x_SetClientData(clientNumber, name, clanTag);
         Com_DPrintf(14, "CoD4x: accepted config client sequence %d\n", sequence);
         return;
     }
@@ -1261,6 +1264,7 @@ void CL_ParseGamestateCod4x(netsrc_t localClientNum, msg_t *msg)
     clientConnection_t *clc = CL_GetLocalClientConnection(localClientNum);
     clc->connectPacketCount = 0;
     CL_ClearState(localClientNum);
+    Cod4x_ClearClientData();
     MSG_ClearLastReferencedEntity(msg);
     memset(cls.mapCenter, 0, sizeof(cls.mapCenter));
 
@@ -1364,11 +1368,11 @@ void CL_ParseGamestateCod4x(netsrc_t localClientNum, msg_t *msg)
             const int clientNumber = MSG_ReadByte(msg);
             if (clientNumber < 0 || clientNumber >= 64)
                 Com_Error(ERR_DROP, "CoD4x: invalid config client %d", clientNumber);
-            // CoD4x uses these as an out-of-band cache for names and clan
-            // tags. The stock cgame also receives authoritative client state
-            // through snapshots, so consuming them is sufficient here.
-            MSG_ReadString(msg);
-            MSG_ReadString(msg);
+            char name[33];
+            char clanTag[13];
+            I_strncpyz(name, MSG_ReadString(msg), sizeof(name));
+            I_strncpyz(clanTag, MSG_ReadString(msg), sizeof(clanTag));
+            Cod4x_SetClientData(clientNumber, name, clanTag);
             ++configClientCount;
             break;
         }
@@ -1402,8 +1406,9 @@ void CL_ParseGamestateCod4x(netsrc_t localClientNum, msg_t *msg)
     CL_InitDownloads(localClientNum);
     Dvar_SetInt(cl_paused, 0);
 
-    Com_Printf(14, "CoD4x: gamestate accepted (client %d, %d bytes of stock config)\n",
-        clc->clientNum, client->gameState.dataCount);
+    Com_Printf(14,
+        "CoD4x: gamestate accepted (client %d, %d bytes of stock config, %d client records)\n",
+        clc->clientNum, client->gameState.dataCount, configClientCount);
 }
 #endif
 

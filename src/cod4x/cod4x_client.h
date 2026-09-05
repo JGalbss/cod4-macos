@@ -28,12 +28,17 @@ void Cod4x_ApplyPasswordFile();
 // Protocol-21 state carried outside the stock IW3 client structures.
 int Cod4x_GetServerConfigDataSequence();
 void Cod4x_SetServerConfigDataSequence(int sequence);
+void Cod4x_ClearClientData();
+void Cod4x_SetClientData(int clientNumber, const char *name, const char *clanTag);
+const char *Cod4x_GetClientName(int clientNumber);
+const char *Cod4x_GetClientClanTag(int clientNumber);
 void Cod4x_ExecuteReliableMessage(struct msg_t *msg);
 
 // Protocol-21 uses binary reliable download controls instead of the stock
 // textual download/nextdl/donedl commands.
 void Cod4x_BeginDownload(const char *localName, const char *remoteName);
 void Cod4x_ReportDownloadComplete();
+bool Cod4x_HandleWWWDownloadResult(bool succeeded);
 
 // Query CoD4x's TCP master protocol and publish the IPv4 results through the
 // engine's existing global-server list.  The stock master uses a different,

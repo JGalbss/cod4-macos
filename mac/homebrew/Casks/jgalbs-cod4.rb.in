@@ -13,7 +13,6 @@ cask "jgalbs-cod4" do
   depends_on macos: :sequoia
 
   app "jgalbs cod4.app"
-  binary "#{appdir}/jgalbs cod4.app/Contents/Resources/cod4", target: "cod4"
 
   caveats <<~EOS
     Requires macOS 15.5 or newer and legally owned compatible Call of Duty 4

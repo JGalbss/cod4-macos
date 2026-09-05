@@ -22,6 +22,95 @@
 #include <universal/profile.h>
 
 #include <cstdlib>
+#include <cstring>
+
+namespace
+{
+bool Kisak_AirstrikeFxTraceEnabled()
+{
+    return std::getenv("KISAK_AIRSTRIKE_TRACE") != nullptr;
+}
+
+bool Kisak_IsAirstrikeFx(const FxEffectDef *effect)
+{
+    if (!effect || !effect->name)
+        return false;
+    return std::strstr(effect->name, "clusterbomb") != nullptr
+        || std::strstr(effect->name, "artillery") != nullptr
+        || std::strstr(effect->name, "jet_afterburner") != nullptr
+        || std::strstr(effect->name, "jet_contrail") != nullptr;
+}
+
+void Kisak_TraceAirstrikeFxDef(const FxEffectDef *effect)
+{
+    if (!Kisak_AirstrikeFxTraceEnabled() || !Kisak_IsAirstrikeFx(effect))
+        return;
+
+    static const FxEffectDef *tracedDefs[16]{};
+    for (const FxEffectDef *tracedDef : tracedDefs)
+    {
+        if (tracedDef == effect)
+            return;
+    }
+    for (const FxEffectDef *&tracedDef : tracedDefs)
+    {
+        if (!tracedDef)
+        {
+            tracedDef = effect;
+            break;
+        }
+    }
+
+    Com_Printf(8,
+        "[airstrike-test] definition effect='%s' looping=%d oneShot=%d emission=%d\n",
+        effect->name, effect->elemDefCountLooping, effect->elemDefCountOneShot,
+        effect->elemDefCountEmission);
+    const int elemCount = effect->elemDefCountLooping + effect->elemDefCountOneShot
+        + effect->elemDefCountEmission;
+    for (int index = 0; index < elemCount; ++index)
+    {
+        const FxElemDef &elem = effect->elemDefs[index];
+        const char *visualName = "-";
+        if (elem.visualCount == 1 && elem.elemType == FX_ELEM_TYPE_RUNNER
+            && elem.visuals.instance.effectDef.handle)
+        {
+            visualName = elem.visuals.instance.effectDef.handle->name;
+        }
+        Com_Printf(8,
+            "[airstrike-test] definition elem=%d type=%u flags=%08x visuals=%u visual='%s' impact='%s' death='%s' emitted='%s'\n",
+            index, static_cast<unsigned int>(elem.elemType), elem.flags,
+            static_cast<unsigned int>(elem.visualCount), visualName,
+            elem.effectOnImpact.handle && elem.effectOnImpact.handle->name
+                ? elem.effectOnImpact.handle->name : "-",
+            elem.effectOnDeath.handle && elem.effectOnDeath.handle->name
+                ? elem.effectOnDeath.handle->name : "-",
+            elem.effectEmitted.handle && elem.effectEmitted.handle->name
+                ? elem.effectEmitted.handle->name : "-");
+    }
+}
+
+void Kisak_TraceAirstrikeFxSpawned(const FxEffectDef *effect, const float *origin)
+{
+    if (!Kisak_AirstrikeFxTraceEnabled() || !Kisak_IsAirstrikeFx(effect))
+        return;
+
+    static int clusterCount;
+    static int explosionCount;
+    static int otherCount;
+    int *count = &otherCount;
+    if (std::strstr(effect->name, "clusterbomb_exp"))
+        count = &explosionCount;
+    else if (std::strstr(effect->name, "clusterbomb"))
+        count = &clusterCount;
+    ++*count;
+    if (*count <= 3 || *count == 10)
+    {
+        Com_Printf(8,
+            "[airstrike-test] spawned effect='%s' count=%d origin=(%.1f %.1f %.1f)\n",
+            effect->name, *count, origin[0], origin[1], origin[2]);
+    }
+}
+}
 
 int32_t fx_maxLocalClients;
 int32_t fx_serverVisClient;
@@ -629,6 +718,8 @@ FxEffect* __cdecl FX_SpawnEffect(
     iassert(origin);
     iassert(axis);
 
+    Kisak_TraceAirstrikeFxDef(remoteDef);
+
     if (std::getenv("KISAK_FX_TRACE"))
     {
         static int traceCount = 0;
@@ -748,6 +839,7 @@ FxEffect* __cdecl FX_SpawnEffect(
                 ;
         } while (InterlockedCompareExchange(Destination, static_cast<LONG>(allocIndex + 1), static_cast<LONG>(allocIndex)) != allocIndex);
         FX_StartNewEffect(system, remoteEffect);
+        Kisak_TraceAirstrikeFxSpawned(remoteDef, origin);
         InterlockedExchangeAdd(&remoteEffect->status, static_cast<LONG>(0xE0000000));
         return remoteEffect;
     }
@@ -996,7 +1088,15 @@ FxEffect *__cdecl FX_SpawnBoltedEffect(
     if (!fx_enable->current.enabled)
         return 0;
     if (!FX_GetBoneOrientation(localClientNum, dobjHandle, boneIndex, &orient))
+    {
+        if (Kisak_AirstrikeFxTraceEnabled() && Kisak_IsAirstrikeFx(def))
+        {
+            Com_Printf(8,
+                "[airstrike-test] bolted effect='%s' entity=%u bone=%u orientation=missing\n",
+                def->name, dobjHandle, boneIndex);
+        }
         return 0;
+    }
     if (FX_NeedsBoltUpdate(def))
     {
         if (dobjHandle >= 0xFFF)
@@ -1022,7 +1122,16 @@ FxEffect *__cdecl FX_SpawnBoltedEffect(
         boneIndex = 2047;
     }
     system = FX_GetSystem(localClientNum);
-    return FX_SpawnEffect(system, def, msecBegin, orient.origin, orient.axis, dobjHandle, boneIndex, 255, 0xFFFFu, 0x3FFu);
+    FxEffect *const effect = FX_SpawnEffect(
+        system, def, msecBegin, orient.origin, orient.axis,
+        dobjHandle, boneIndex, 255, 0xFFFFu, 0x3FFu);
+    if (Kisak_AirstrikeFxTraceEnabled() && Kisak_IsAirstrikeFx(def))
+    {
+        Com_Printf(8,
+            "[airstrike-test] bolted effect='%s' entity=%u bone=%u spawned=%d\n",
+            def->name, dobjHandle, boneIndex, effect != nullptr);
+    }
+    return effect;
 }
 
 char __cdecl FX_NeedsBoltUpdate(const FxEffectDef *def)
@@ -1829,6 +1938,15 @@ void __cdecl FX_SpawnRunner(
     }
     if (spawnedEffect)
         FX_DelRefToEffect(system, spawnedEffect);
+    if (Kisak_AirstrikeFxTraceEnabled()
+        && (Kisak_IsAirstrikeFx(effect->def) || Kisak_IsAirstrikeFx(effectDef)))
+    {
+        Com_Printf(8,
+            "[airstrike-test] runner parent='%s' child='%s' spawned=%d\n",
+            effect->def && effect->def->name ? effect->def->name : "(unnamed)",
+            effectDef && effectDef->name ? effectDef->name : "(unnamed)",
+            spawnedEffect != nullptr);
+    }
 }
 
 bool __cdecl FX_SpawnModelPhysics(

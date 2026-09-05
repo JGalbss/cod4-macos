@@ -7,6 +7,9 @@
 #include <client/client.h>
 #include <universal/com_sndalias.h>
 #include <gfx_d3d/r_rendercmds.h>
+#ifdef KISAK_COD4X
+#include <cod4x/cod4x_client.h>
+#endif
 
 
 void __cdecl CL_GetClientState(int localClientNum, uiClientState_s *state)
@@ -475,6 +478,17 @@ int __cdecl CL_GetClientName(int localClientNum, int index, char *buf, int size)
     int i; // [esp+8h] [ebp-4h]
 
     *buf = 0;
+#ifdef KISAK_COD4X
+    if (Cod4x_UseExtendedProtocol())
+    {
+        const char *name = Cod4x_GetClientName(index);
+        if (name[0])
+        {
+            I_strncpyz(buf, name, size);
+            return 1;
+        }
+    }
+#endif
     LocalClientGlobals = CL_GetLocalClientGlobals(localClientNum);
     if (!LocalClientGlobals->snap.valid)
         return 0;
@@ -519,4 +533,3 @@ void __cdecl CL_InitUI()
     cls.uiStarted = 1;
     R_PushRemoteScreenUpdate(remoteScreenUpdateNesting);
 }
-

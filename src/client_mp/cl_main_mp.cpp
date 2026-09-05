@@ -2176,6 +2176,10 @@ void __cdecl CL_WWWDownload()
     ret = (dlStatus_t)DL_DownloadLoop();
     if (ret)
     {
+#ifdef KISAK_COD4X
+        if (Cod4x_HandleWWWDownloadResult(ret == DL_DONE))
+            return;
+#endif
         if (DL_DLIsMotd())
         {
             if (ret == DL_DONE)

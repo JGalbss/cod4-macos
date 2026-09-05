@@ -2160,13 +2160,7 @@ int __cdecl UI_NetFilter_HandleKey(int flags, float *special, int key)
 BOOL __cdecl UI_IsMapActive(int mapIndex)
 {
     if (mapIndex < 0 || mapIndex >= sharedUiInfo.mapCount)
-        MyAssertHandler(
-            ".\\ui_mp\\ui_main_mp.cpp",
-            3117,
-            0,
-            "%s\n\t(mapIndex) = %i",
-            "(mapIndex >= 0 && mapIndex < sharedUiInfo.mapCount)",
-            mapIndex);
+        return 0;
     return sharedUiInfo.mapList[mapIndex].active != 0;
 }
 
@@ -3497,11 +3491,12 @@ void __cdecl UI_UpdateDisplayServers(uiInfo_s *uiInfo)
     if (*(unsigned int *)&sharedUiInfo.gap8EB4[72904] != static_cast<unsigned int>(serverCount))
     {
         *(unsigned int *)&sharedUiInfo.gap8EB4[72904] = serverCount;
-        if (*(unsigned int *)&sharedUiInfo.gap8EB4[72900])
-        {
-            *(unsigned int *)&sharedUiInfo.serverStatus.string[1128] = -1;
-            UI_BuildServerDisplayList(uiInfo, 1);
-        }
+        // A fresh install goes from zero cached Favorites to the seeded public
+        // server while the display list is still empty.  The old guard rebuilt
+        // only when a row was already visible, so that zero-to-one transition
+        // remained blank until another full refresh happened by chance.
+        *(unsigned int *)&sharedUiInfo.serverStatus.string[1128] = -1;
+        UI_BuildServerDisplayList(uiInfo, 1);
     }
 }
 
@@ -4364,13 +4359,7 @@ int __cdecl UI_GetListIndexFromMapIndex(int testMapIndex)
     int mapIndex; // [esp+4h] [ebp-4h]
 
     if (testMapIndex < 0 || testMapIndex >= sharedUiInfo.mapCount)
-        MyAssertHandler(
-            ".\\ui_mp\\ui_main_mp.cpp",
-            4153,
-            0,
-            "%s\n\t(testMapIndex) = %i",
-            "(testMapIndex >= 0 && testMapIndex < sharedUiInfo.mapCount)",
-            testMapIndex);
+        return 0;
     listIndex = 0;
     for (mapIndex = 0; mapIndex < sharedUiInfo.mapCount; ++mapIndex)
     {
@@ -4474,9 +4463,21 @@ void __cdecl UI_FeederSelection(int localClientNum, float feederID, int index)
     }
     else if (feederID == 2.0)
     {
-        if (*(int *)&sharedUiInfo.gap8EB4[72900] > 0)
+        const int displayedServerCount = *(int *)&sharedUiInfo.gap8EB4[72900];
+        if (index >= 0 && index < displayedServerCount)
+        {
             *(unsigned int *)&sharedUiInfo.serverStatus.string[1128] = index;
-        LAN_GetServerInfo(ui_netSource->current.integer, *(unsigned int *)&sharedUiInfo.gap8EB4[4 * index - 7100], info_0, 1024);
+            LAN_GetServerInfo(
+                ui_netSource->current.integer,
+                *(unsigned int *)&sharedUiInfo.gap8EB4[4 * index - 7100],
+                info_0,
+                1024);
+        }
+        else
+        {
+            *(unsigned int *)&sharedUiInfo.serverStatus.string[1128] = -1;
+            info_0[0] = 0;
+        }
     }
     else if (feederID == 7.0)
     {

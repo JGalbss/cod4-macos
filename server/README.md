@@ -9,7 +9,8 @@ plane is one standard-library Python program that provides:
 
 - a loopback-only web interface;
 - an SSH-friendly `cod4ctl` command;
-- map, mode, rules, player administration, progression and RCON controls.
+- map, mode, rules, player administration, progression and RCON controls;
+- RCON-only per-player god mode, ADS aim lock and through-wall enemy markers.
 
 ## Install
 
@@ -40,6 +41,10 @@ cod4 menu
 The launcher creates the SSH tunnel and opens the browser. `cod4 menu stop`
 closes it; `cod4 server status` and `cod4 server console` expose the same
 backend without the website.
+
+The same player powers are available over SSH as
+`cod4ctl power SLOT {godmode,aimbot,wallhack} {on,off}`. They apply only to the
+target's current server session and can always be revoked from the dashboard.
 
 `maps.sh` currently installs checksum-pinned CoD4/IW3 builds of Rust,
 Terminal, Highrise and Scrapyard. See [`MAPS.md`](MAPS.md) for the compatibility

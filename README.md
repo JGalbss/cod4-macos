@@ -12,11 +12,6 @@ macOS, featuring a native Metal renderer.
 | [`homebrew-cod4-macos`](https://github.com/JGalbss/homebrew-cod4-macos) | Homebrew installation metadata for released builds |
 | [`OpenAssetTools`](https://github.com/JGalbss/OpenAssetTools) | Asset tooling used by the client to load game data |
 
-The matching credential-free dedicated-server deployment and private control
-plane source live in [`server/`](server/). Installed builds expose them through
-`cod4 menu` (web controls), `cod4 server status`, and `cod4 server console`;
-the launcher manages the SSH tunnel automatically.
-
 ## Current status
 
 The client supports profiles, multiplayer menus and maps, keyboard and mouse

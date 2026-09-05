@@ -304,15 +304,16 @@ static void CG_NormalizeNativeNakedVision(
     // those names must retain their authored film/glow values.
     const char *mapName = Dvar_GetString("mapname");
     if (I_stricmp(name, "mpintro")
+        && I_stricmp(name, "mpoutro")
         && (!mapName || !*mapName || I_stricmp(name, mapName)))
     {
         return;
     }
 
-    // The ordinary 2007 multiplayer path replaces its countdown grade with a
-    // heavily desaturated, high-contrast per-map film at match start. On modern
-    // displays that looks like the colors suddenly broke. Keep this base view at
-    // one clean full-color exposure. Night vision remains a separate channel.
+    // The ordinary 2007 multiplayer path replaces its countdown and end-match
+    // grades with heavily desaturated, high-contrast film. On modern displays
+    // that looks like the colors suddenly broke. Keep these base views at one
+    // clean full-color exposure. Night vision remains a separate channel.
     settings->filmEnable = true;
     settings->filmBrightness = 0.0f;
     settings->filmContrast = 1.0f;
