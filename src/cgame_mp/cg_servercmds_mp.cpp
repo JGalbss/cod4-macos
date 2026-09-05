@@ -1362,6 +1362,20 @@ void __cdecl CG_SetClientDvarFromServer(cg_s *cgameGlob, const char *dvarname, c
 {
     uint32_t v3; // eax
 
+    // Renderer film tweaks are developer controls, not gameplay state.  Some
+    // CoD4x server scripts enable them after spawn and force their own saved
+    // saturation/tint values over the map's authored vision set.  On the
+    // native client this made an initially correct scene turn monochrome a few
+    // seconds into play and also mutated local renderer preferences.  Keep
+    // server-owned HUD/menu dvars working, but never accept remote developer
+    // film overrides; local console use remains available for diagnostics.
+    if (!I_stricmp(dvarname, "r_filmUseTweaks")
+        || !I_strnicmp(dvarname, "r_filmTweak", 11))
+    {
+        Com_Printf(8, "[vision-policy] ignored remote developer film override '%s'\n", dvarname);
+        return;
+    }
+
     if (I_stricmp(dvarname, "cg_objectiveText"))
     {
         if (I_stricmp(dvarname, "hud_drawHud"))

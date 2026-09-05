@@ -255,6 +255,18 @@ stapled DMG and an install/update test from the downloaded final bytes.
 Treat regressions, crashes, assertions, red-screen diagnostics, and rendering
 artifacts as release blockers even if a narrower automated check passes.
 
+## 0.2.5 release-candidate evidence
+
+- The live protocol-21 server reproduced the 0.2.4 regression by sending
+  `r_filmUseTweaks` plus all seven `r_filmTweak*` values after spawn. The
+  patched client rejected those remote developer controls while retaining the
+  neutral map grade (`desaturation=1`, white light/dark tints, zero bias).
+- The live join completed without a parser failure, connection loss, assertion,
+  or crash. Logs are in `/tmp/cod4-film-policy.xz2Qjh`.
+- A second independent live run captured a full-color post-spawn frame after
+  the override commands. Evidence is in
+  `/tmp/cod4-film-visual-final.G2fQgx`.
+
 ## 0.2.4 release-candidate evidence
 
 - Raw arm64 executable SHA-256:

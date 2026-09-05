@@ -15,7 +15,7 @@ cask from the exact release DMG and matching tag:
 
 ```zsh
 mac/tools/prepare-homebrew-cask.zsh \
-  --tag v0.2.4 \
+  --tag v0.2.5 \
   --source-sha "$(git rev-parse HEAD)"
 ```
 
