@@ -7,6 +7,17 @@ The project uses semantic versioning while the port is under active development.
 
 No user-facing changes yet.
 
+## 0.2.7 release candidate - 2026-09-05
+
+### Fixed
+
+- Made the active-play connection warning use a fixed two-second command-stall
+  threshold instead of the legacy 128-command history. At 120+ FPS the old
+  history covered roughly one second and treated normal Internet jitter as a
+  connection interruption.
+- Kept genuine stalls visible and left the engine's authoritative network
+  timeout handling unchanged.
+
 ## 0.2.6 release candidate - 2026-09-05
 
 ### Fixed

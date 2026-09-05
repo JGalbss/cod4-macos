@@ -947,6 +947,7 @@ void __cdecl CG_DrawDisconnect(int32_t localClientNum)
             || !I_stricmp(cgameGlob->visionNameNaked, "mpoutro");
         static const bool traceNetwork = std::getenv("KISAK_NETWORK_TRACE") != nullptr;
         static bool tracedMatchTransitionSuppression;
+        static bool tracedDisconnectWarning;
         if (suppressForMatchTransition)
         {
             if (traceNetwork && !tracedMatchTransitionSuppression)
@@ -959,13 +960,38 @@ void __cdecl CG_DrawDisconnect(int32_t localClientNum)
                     cgameGlob->visionNameNaked);
             }
             tracedMatchTransitionSuppression = true;
+            tracedDisconnectWarning = false;
             return;
         }
         tracedMatchTransitionSuppression = false;
+
+        // The stock detector assumes roughly 60 commands per second and uses
+        // the oldest entry in a 128-command ring as its delay threshold.  At
+        // 120+ FPS that same ring covers about one second, so an ordinary
+        // Internet jitter spike can flash the warning even though the
+        // connection immediately recovers.  Preserve the intended two-second
+        // warning delay in milliseconds, independent of render/input rate.
+        constexpr int kDisconnectWarningDelayMsec = 2000;
+        const int commandAckDelayMsec =
+            cgameGlob->time - cgameGlob->nextSnap->ps.commandTime;
+        if (commandAckDelayMsec < kDisconnectWarningDelayMsec)
+        {
+            tracedDisconnectWarning = false;
+            return;
+        }
+
         cmdNum = CL_GetCurrentCmdNumber(localClientNum) - 127;
         CL_GetUserCmd(localClientNum, cmdNum, &cmd);
         if (cmd.serverTime > cgameGlob->nextSnap->ps.commandTime && cmd.serverTime <= cgameGlob->time)
         {
+            if (traceNetwork && !tracedDisconnectWarning)
+            {
+                Com_Printf(8,
+                    "[network] disconnect warning displayed: ackDelay=%d time=%d commandTime=%d\n",
+                    commandAckDelayMsec, cgameGlob->time,
+                    cgameGlob->nextSnap->ps.commandTime);
+            }
+            tracedDisconnectWarning = true;
             scrPlace = &scrPlaceView[localClientNum];
             s = UI_SafeTranslateString("CGAME_CONNECTIONINTERUPTED");
             font = UI_GetFontHandle(scrPlace, 0, 0.5);

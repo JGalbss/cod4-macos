@@ -255,6 +255,38 @@ stapled DMG and an install/update test from the downloaded final bytes.
 Treat regressions, crashes, assertions, red-screen diagnostics, and rendering
 artifacts as release blockers even if a narrower automated check passes.
 
+## 0.2.7 release-candidate evidence
+
+- Raw arm64 executable SHA-256:
+  `18e62391b4cbbb41026e3fec86ecb0cb1cee42b5771b7f5c158b4b90c82faf8b`.
+- Packaged arm64 executable SHA-256:
+  `23124c0c93cfc4794c4943f58cbee6f3f2a34e419eec0bf578eb8c953dd6a29e`.
+- Versioned DMG SHA-256:
+  `e365c44c41b0275b3ae74b7bd4ca05f211c662e4a71b682ef493025194e49322`.
+- The legacy warning used a 128-command ring as an implicit time threshold. On
+  the 120 Hz test display that represented only about 1.06 seconds instead of
+  the roughly two seconds it covered at the original 60 Hz target.
+- A server-side capture of a healthy 158-second live protocol-21 session found
+  a 1.000-second maximum server-to-client packet gap and a 0.832-second maximum
+  client-to-server gap. The client stayed connected and exited cleanly. Capture
+  evidence is `/tmp/jgalbs-cod4-live.pcap` on the test server and client evidence
+  is in `/tmp/jgalbs-cod4-live-repro`.
+- With the fixed millisecond threshold, a second live session completed without
+  drawing a warning during normal network jitter and exited cleanly. Evidence is
+  `/tmp/jgalbs-cod4-live-repro/time-threshold-clean.log`.
+- A controlled three-second server-to-client outage then drew the warning at an
+  observed command-ack delay of 2.002 seconds, recovered after packet delivery
+  resumed, remained connected, and exited normally. Evidence is in
+  `/tmp/jgalbs-cod4-drop-exact.XXXXXX.log`.
+- The installed 0.2.7/build-9 package completed a separate deterministic
+  `mp_vacant` load, active-play, and clean-shutdown smoke test. Its DMG passed
+  SHA-256 and `hdiutil` verification, and the installed app passed deep strict
+  code-sign validation. Evidence is in
+  `/tmp/jgalbs-cod4-0.2.7-package-smoke.log`.
+- The droplet remained healthy during diagnosis: no interface errors or drops,
+  no resource pressure, and no server crash. The engine's hard-timeout path was
+  not changed.
+
 ## 0.2.6 release-candidate evidence
 
 - Raw arm64 executable SHA-256:
