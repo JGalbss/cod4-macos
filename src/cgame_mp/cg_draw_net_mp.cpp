@@ -9,6 +9,8 @@
 
 #include <server_mp/server_mp.h>
 
+#include <cstdlib>
+
 // struct lagometer_t lagometer 82829b60     cg_draw_net_mp.obj
 
 uint8_t *s_clientAnalysisData;
@@ -933,6 +935,33 @@ void __cdecl CG_DrawDisconnect(int32_t localClientNum)
     if (!CL_IsServerRestarting(localClientNum))
     {
         cgameGlob = CG_GetLocalClientGlobals(localClientNum);
+        // End-of-map scripts can deliberately stop consuming user commands
+        // while they keep sending healthy snapshots for the final scoreboard
+        // and map vote.  The legacy detector below only retains 128 commands;
+        // at modern frame rates that history is exhausted well before a
+        // twelve-second vote ends and produces a false "Connection
+        // Interrupted" warning.  A real outage is still handled by
+        // CL_CheckTimeout, but an intermission is not an outage.
+        const bool suppressForMatchTransition = !cgameGlob->nextSnap
+            || cgameGlob->nextSnap->ps.pm_type == PM_INTERMISSION
+            || !I_stricmp(cgameGlob->visionNameNaked, "mpoutro");
+        static const bool traceNetwork = std::getenv("KISAK_NETWORK_TRACE") != nullptr;
+        static bool tracedMatchTransitionSuppression;
+        if (suppressForMatchTransition)
+        {
+            if (traceNetwork && !tracedMatchTransitionSuppression)
+            {
+                Com_Printf(8,
+                    "[network] disconnect warning suppressed during match transition: "
+                    "time=%d pm=%d vision='%s'\n",
+                    cgameGlob->time,
+                    cgameGlob->nextSnap ? cgameGlob->nextSnap->ps.pm_type : -1,
+                    cgameGlob->visionNameNaked);
+            }
+            tracedMatchTransitionSuppression = true;
+            return;
+        }
+        tracedMatchTransitionSuppression = false;
         cmdNum = CL_GetCurrentCmdNumber(localClientNum) - 127;
         CL_GetUserCmd(localClientNum, cmdNum, &cmd);
         if (cmd.serverTime > cgameGlob->nextSnap->ps.commandTime && cmd.serverTime <= cgameGlob->time)

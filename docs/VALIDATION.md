@@ -255,6 +255,33 @@ stapled DMG and an install/update test from the downloaded final bytes.
 Treat regressions, crashes, assertions, red-screen diagnostics, and rendering
 artifacts as release blockers even if a narrower automated check passes.
 
+## 0.2.6 release-candidate evidence
+
+- Raw arm64 executable SHA-256:
+  `db429737f378dc4619f9c345354acbbc4d3d109eec7cd25e687e873e846fbcf7`.
+- Packaged arm64 executable SHA-256:
+  `e8e279e68bd0aa5fb4668fcb6744c1887ab2a7aa2f2fd2a7dc3ecb3b6bf7d313`.
+- Versioned DMG SHA-256:
+  `ba6f45100a1d18b47922a06cdb113371f47b36b6a77879861b9842b48a6a7a46`.
+  The image passed checksum and `hdiutil` verification, and its app passed deep
+  strict code-sign, bundled SDL, and Sparkle validation.
+- A real local `mp_vacant` match with `com_maxfps 250` and VSync off held the
+  120 Hz display rate at roughly 8.3 ms per normal frame. CPU encoding remained
+  around 2.6-2.9 ms, GPU work around 4.9-5.8 ms, and no normal frame exceeded
+  16.7 ms. Evidence is in `/tmp/cod4-perf-local250.XEnpUV`.
+- A VSync-on comparison produced the same stable 120 Hz pacing without normal
+  frames over 16.7 ms. Evidence is in `/tmp/cod4-perf-localvsync.yv0yWJ`.
+- The installed, packaged 0.2.6 executable ran a timed match through the real
+  outcome and map-vote transition while healthy snapshots continued. It
+  identified `mpOutro`, suppressed the legacy false disconnect warning, and
+  exited cleanly. Evidence is in `/tmp/jgalbs-cod4-0.2.6-transition`.
+- The installed package also passed a separate cold-start, map-load, auto-join,
+  active-play, and clean-shutdown smoke test. Evidence is in
+  `/tmp/jgalbs-cod4-0.2.6-installed-smoke`.
+- A live protocol-21 Scrapyard join rejected all eight remote developer film
+  overrides and retained the neutral full-color map grade. Evidence is in
+  `/tmp/cod4-vision-trace2.XSDgPP`.
+
 ## 0.2.5 release-candidate evidence
 
 - Raw arm64 executable SHA-256:

@@ -7,6 +7,20 @@ The project uses semantic versioning while the port is under active development.
 
 No user-facing changes yet.
 
+## 0.2.6 release candidate - 2026-09-05
+
+### Fixed
+
+- Prevented the client from showing a false `Connection Interrupted` warning
+  while a healthy server is presenting the final scoreboard or map vote.
+
+### Verified
+
+- Real local multiplayer holds the display's 120 Hz presentation rate with the
+  existing 250 FPS cap, clean normal-frame pacing, and CPU/GPU headroom.
+- A timed match completed through the real outcome and intermission sequence
+  without displaying the disconnect warning.
+
 ## 0.2.2 release candidate - 2026-09-04
 
 ### Changed
