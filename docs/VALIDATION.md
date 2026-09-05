@@ -258,11 +258,18 @@ artifacts as release blockers even if a narrower automated check passes.
 ## 0.2.4 release-candidate evidence
 
 - Raw arm64 executable SHA-256:
-  `ef7c893c37312b12bff0199aec623fba69151d63707c5e094f0b61300e3f291d`.
+  `95724dfcdca82609a7f079229a296d0aae64db6912b76dae43561c58156bc067`.
+- Packaged arm64 executable SHA-256:
+  `4e6b094207d1f940d1c3d06c0c9a0bcbedcdd1c910bda640a6b2c99c935eed3b`.
+- Versioned DMG SHA-256:
+  `b077ec438899ab8a90650e929255f65f4eade9821e81d64fe2c4cfca5c6e4def`.
+  The disk image passed `hdiutil verify`, deep strict code-sign verification,
+  bundled SDL/Sparkle checks, and exact-byte comparison with the packaged
+  release candidate.
 - Two-client combat, killcam skip, respawn, and resolved player-name test:
-  `/tmp/kisak-native-combat.uPzAIa`.
+  `/tmp/kisak-native-combat.gZ9IDU`.
 - Live protocol-21 join, initial client-name cache, snapshot, and clean
-  connection test: `/tmp/kisak-native-cod4x-join.wsd4i7`.
+  connection test: `/tmp/kisak-native-cod4x-join.EQFZbK`.
 - Real score-limit end-state color and overlay test:
   `/tmp/cod4-outcome-hud-fixed.n2iyLq`.
 - Real airstrike parent/impact FX test:
