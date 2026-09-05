@@ -257,6 +257,14 @@ artifacts as release blockers even if a narrower automated check passes.
 
 ## 0.2.5 release-candidate evidence
 
+- Raw arm64 executable SHA-256:
+  `13947f3e96413afca2b56b42abe18f7d4f1047e619ac63824019c122e3affa82`.
+- Packaged arm64 executable SHA-256:
+  `2df13c9c2465c1a3ac5df6193a865d82f31e4c9d4c20b9160290a9a563b328cd`.
+- Versioned DMG SHA-256:
+  `1cb0c62581874f670133227b31fbc4a978a7a6db3193841c887185f3399a949f`.
+  The disk image passed checksum and `hdiutil` verification, and the app passed
+  deep strict code-sign and bundled SDL/Sparkle validation.
 - The live protocol-21 server reproduced the 0.2.4 regression by sending
   `r_filmUseTweaks` plus all seven `r_filmTweak*` values after spawn. The
   patched client rejected those remote developer controls while retaining the
@@ -266,6 +274,10 @@ artifacts as release blockers even if a narrower automated check passes.
 - A second independent live run captured a full-color post-spawn frame after
   the override commands. Evidence is in
   `/tmp/cod4-film-visual-final.G2fQgx`.
+- The exact packaged 0.2.5/build-7 executable repeated the live protocol-21
+  join on Rust, rejected every remote film override, retained neutral full
+  saturation, captured a full-color post-spawn frame, and exited cleanly.
+  Evidence is in `/tmp/cod4-film-package.2fGMfC`.
 
 ## 0.2.4 release-candidate evidence
 
