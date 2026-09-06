@@ -15,7 +15,22 @@ plane is one standard-library Python program that provides:
 ## Install
 
 Copy legally owned dedicated-server data into `/opt/cod4/main` and
-`/opt/cod4/zone/english`. On a new Ubuntu host, review the scripts and run:
+`/opt/cod4/zone/english`. New Experience's nuke also references the retail
+single-player radiation shellshock definitions. Build their small private
+runtime zone locally, then stage it before running `configure.sh`:
+
+```bash
+COD4_DATA='/absolute/path/to/Call of Duty 4' \
+  server/build-private-runtime-zone.sh /tmp/jgalbs-runtime-mod.ff
+scp /tmp/jgalbs-runtime-mod.ff root@SERVER:/opt/cod4/private-assets/mod.ff
+```
+
+This requires OpenAssetTools' `Unlinker` and `Linker` under
+`build/OpenAssetTools/build/bin/Release_x64`, or their paths in
+`OAT_UNLINKER` and `OAT_LINKER`. The generated `mod.ff` contains retail data:
+keep it private and never commit it or attach it to a public release.
+
+On a new Ubuntu host, review the scripts and run:
 
 ```bash
 sudo server/provision.sh
@@ -53,6 +68,13 @@ rule and the status of Wasteland and Afghan.
 ## Test
 
 ```bash
-python3 -m unittest server/test_cod4ctl.py
+python3 -m unittest server/test_cod4ctl.py server/test_patch_progression.py
 bash -n server/*.sh
 ```
+
+CoD4X probes for `steam_api.so` during startup even when this private server
+uses no Steam identity features. Its "Steam is not going to work" line is
+expected with `sv_authorizemode -1` and does not affect protocol-21 clients,
+RCON, progression, or matches. Do not silence it with an untrusted replacement
+library; install an authentic compatible Steam API only if Steam identity is
+made an explicit server requirement.

@@ -2,7 +2,7 @@
 
 This is an evidence ledger for the native Apple Silicon client, not a claim of
 complete compatibility. Results below were observed during development through
-2026-09-05.
+2026-09-06.
 
 ## Observed working paths
 
@@ -44,6 +44,11 @@ complete compatibility. Results below were observed during development through
 - A level-9 progression test exposed all five Create-a-Class slots, and the
   level/loadout state persisted across restart. This verifies the tested
   Create-a-Class path, not the complete unlock matrix at every rank.
+- A disposable live client completed a full queued max-rank repair without
+  `EXE_SERVERCOMMANDOVERFLOW` or `EXE_ERR_RELIABLE_CYCLED_OUT`. A cold reopen
+  reported rank stat 54 (displayed level 55) and maximum XP 125490. The queue
+  advances one promotion every 0.75 seconds so unlock traffic can be
+  acknowledged instead of overflowing the 64-command reliable ring.
 - Installed-app first-run probes verified explicit, saved, and `$HOME/Games/cod4`
   data discovery plus presentation of the retail-data chooser when no compatible
   directory existed. Fresh profiles received one jgalbs Favorite.
@@ -104,6 +109,11 @@ complete compatibility. Results below were observed during development through
   public commit `3dfcd32be2175f7c53a6ca60cb18cc0a85ccda76`.
 - The car-effect audit found no missing asset. The observed car debris and
   shellshock are authored effects, not a missing-resource fallback.
+- The dedicated server loads a private `mod.ff` containing the three retail
+  radiation shellshock definitions used by New Experience's nuke. After the
+  zone loaded, all `radiation_low`, `radiation_med`, and `radiation_high`
+  missing-rawfile/config errors disappeared. The retail-derived zone remains
+  outside source control and public release artifacts.
 - The exact post-LP64-fix raw executable SHA-256 is
   `bd05e3552de2b5f43e1ca1628f8f61911a71dbe3cad9f46a10182528da5fa863`.
   It loaded the custom `mp_mw2_term` map into active gameplay for 600 frames,

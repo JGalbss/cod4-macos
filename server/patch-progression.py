@@ -27,12 +27,11 @@ COMMANDS = r'''
 				self iPrintlnBold( "^3Already at or above level " + wantedLevel );
 				break;
 			}
-			targetXp = maps\mp\gametypes\_rank::getRankInfoMinXP( wantedRank );
-			self maps\mp\gametypes\_persistence::statSet( "rankxp", targetXp );
-			self.pers[ "rankxp" ] = targetXp;
-			if( self maps\mp\gametypes\_rank::updateRank() )
-				self thread maps\mp\gametypes\_rank::updateRankAnnounceHUD();
-			self iPrintlnBold( "^2Level set to " + wantedLevel + " - quit through the menu to save" );
+			// updateRank emits every intervening unlock as a reliable server
+			// command. A large one-frame jump overflows the client's 64-command
+			// ring, so advance one rank at a time and let each batch be acked.
+			self notify( "admin_progression_changed" );
+			self thread adminQueueLevel( wantedRank, false );
 			break;
 
 		case "unlockcac":
@@ -45,17 +44,11 @@ COMMANDS = r'''
 			break;
 
 		case "maxrank":
-			// Replay every promotion from rank zero. Merely setting rankxp on a
-			// player who already displays 55 skips updateRank and leaves broken
-			// unlock stats (including Create-a-Class) broken.
-			maxXp = maps\mp\gametypes\_rank::getRankInfoMaxXP( level.maxRank );
-			self maps\mp\gametypes\_persistence::statSet( "rankxp", maxXp );
-			self maps\mp\gametypes\_persistence::statSet( "rank", 0 );
-			self.pers[ "rankxp" ] = maxXp;
-			self.pers[ "rank" ] = 0;
-			self maps\mp\gametypes\_rank::updateRank();
-			self setStat( 200, 1 );
-			self iPrintlnBold( "^2Max rank + unlocks repaired - quit through the menu to save" );
+			// Replay every promotion, but rate-limit the unlock traffic. Merely
+			// setting rankxp on a displayed level 55 skips updateRank and leaves
+			// broken unlock stats (including Create-a-Class) broken.
+			self notify( "admin_progression_changed" );
+			self thread adminQueueLevel( level.maxRank, true );
 			break;
 
 		case "adminpower":
@@ -116,6 +109,58 @@ COMMANDS = r'''
 
 ADMIN_FUNCTIONS = r'''
 // BEGIN JGALBS ADMIN POWERS
+adminQueueLevel( wantedRank, repairUnlocks )
+{
+	self endon( "disconnect" );
+	self endon( "admin_progression_changed" );
+
+	if( repairUnlocks )
+	{
+		// Reset the rank cursor so updateRank visits every unlock tier. The
+		// first 0 -> 1 step also replays rank-zero unlocks.
+		self maps\mp\gametypes\_persistence::statSet( "rankxp", 0 );
+		self maps\mp\gametypes\_persistence::statSet( "rank", 0 );
+		self.pers[ "rankxp" ] = 0;
+		self.pers[ "rank" ] = 0;
+		self iPrintlnBold( "^2Max-rank repair queued - keep playing while unlocks are applied" );
+	}
+	else
+	{
+		self iPrintlnBold( "^2Level " + ( wantedRank + 1 ) + " queued - keep playing while unlocks are applied" );
+	}
+
+	firstRank = self.pers[ "rank" ] + 1;
+	for( rankId = firstRank; rankId <= wantedRank; rankId++ )
+	{
+		targetXp = maps\mp\gametypes\_rank::getRankInfoMinXP( rankId );
+		self maps\mp\gametypes\_persistence::statSet( "rankxp", targetXp );
+		self.pers[ "rankxp" ] = targetXp;
+		self maps\mp\gametypes\_rank::updateRank();
+
+		// CoD4 acknowledges reliable commands in subsequent client packets.
+		// This gap keeps even the busiest promotion comfortably below the
+		// ring limit instead of guessing a safe maximum level jump.
+		wait .75;
+	}
+
+	if( repairUnlocks )
+	{
+		maxXp = maps\mp\gametypes\_rank::getRankInfoMaxXP( level.maxRank );
+		self maps\mp\gametypes\_persistence::statSet( "rankxp", maxXp );
+		self.pers[ "rankxp" ] = maxXp;
+		self setStat( 200, 1 );
+	}
+
+	// Announce only the final promotion. Spawning every promotion HUD at
+	// once was another avoidable source of reliable-command pressure.
+	wait .75;
+	self thread maps\mp\gametypes\_rank::updateRankAnnounceHUD();
+	if( repairUnlocks )
+		self iPrintlnBold( "^2Max rank + unlocks repaired - quit through the menu to save" );
+	else
+		self iPrintlnBold( "^2Level set to " + ( wantedRank + 1 ) + " - quit through the menu to save" );
+}
+
 adminAimbotLoop()
 {
 	self endon( "disconnect" );
@@ -126,7 +171,7 @@ adminAimbotLoop()
 		if( !isDefined( self.pers[ "adminAimbot" ] ) || !self.pers[ "adminAimbot" ] )
 			return;
 
-		if( !isAlive( self ) || ( !self aimButtonPressed() && !self attackButtonPressed() ) )
+		if( !isAlive( self ) || ( !self adsButtonPressed() && !self attackButtonPressed() ) )
 		{
 			wait .05;
 			continue;

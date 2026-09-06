@@ -6,6 +6,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVER_DIR=/opt/cod4
 MOD_DIR="$SERVER_DIR/mods/new_experience"
+PRIVATE_ASSET_DIR="${COD4_PRIVATE_ASSET_DIR:-$SERVER_DIR/private-assets}"
 GAME_USER=cod4
 PASSWORD="${COD4_PASSWORD:?set COD4_PASSWORD}"
 HOSTNAME_STR="${COD4_HOSTNAME:-CoD4 Server}"
@@ -110,6 +111,20 @@ set sv_wwwDlDisconnected 0
 
 set sv_mapRotation "$ROTATION"
 EOF
+
+# New Experience's tactical nuke uses three radiation shellshock definitions
+# from the retail single-player fastfiles. The dedicated-server data set does
+# not register those assets automatically. Keep the generated mod.ff beside
+# the private server data (never in source control), then install it into the
+# mod on every configure run.
+echo "==> installing private runtime assets"
+if [ ! -f "$PRIVATE_ASSET_DIR/mod.ff" ]; then
+  echo "missing private runtime zone: $PRIVATE_ASSET_DIR/mod.ff" >&2
+  echo "build it from legally owned retail fastfiles before configuring" >&2
+  exit 1
+fi
+install -o "$GAME_USER" -g "$GAME_USER" -m 0644 \
+  "$PRIVATE_ASSET_DIR/mod.ff" "$MOD_DIR/mod.ff"
 
 echo "==> patching the mod"
 python3 - "$MOD_DIR" <<'PY'

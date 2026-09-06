@@ -370,13 +370,26 @@ class Controller:
             "max": f"cmd maxrank:{slot}",
         }
         if operation == "level":
-            command = f"cmd setlevel:{slot}:{validate_level(level_value)}"
+            target_level = validate_level(level_value)
+            command = f"cmd setlevel:{slot}:{target_level}"
+            confirmation = (
+                f"Level {target_level} queued safely. Promotions are rate-limited; "
+                "level 1 to 55 takes about 42 seconds."
+            )
         else:
             try:
                 command = commands[operation]
             except KeyError as exc:
                 raise ControlError("unknown progression operation") from exc
-        return self.connection.rcon(command)
+            confirmation = {
+                "cac": "Create-a-Class repair applied.",
+                "max": (
+                    "Max-rank repair queued safely. Every unlock tier will be replayed "
+                    "in about 42 seconds."
+                ),
+            }[operation]
+        output = self.connection.rcon(command)
+        return "\n".join(part for part in (confirmation, output) if part)
 
     def player_power(self, slot_value: object, power_value: object, state_value: object) -> str:
         slot = validate_slot(slot_value)
@@ -514,7 +527,7 @@ WEB_PAGE = r"""<!doctype html>
   </section>
   <section class="cols">
     <div class="panel"><h2>Broadcast</h2><p class="panel-note">SEND A SERVER MESSAGE TO ALL ACTIVE CLIENTS.</p><div class="console-row"><input id="message" maxlength="300" placeholder="SERVER RESTARTS IN 5 MINUTES"><button id="announce">TX</button></div></div>
-    <div class="panel"><h2>Player operations</h2><p class="panel-note">PROGRESSION USES THE MOD'S REAL PROMOTION PATH. PLAYER MUST QUIT THROUGH THE MENU TO SAVE IT.</p>
+    <div class="panel"><h2>Player operations</h2><p class="panel-note">PROGRESSION USES THE MOD'S REAL PROMOTION PATH AND IS RATE-LIMITED TO PREVENT RELIABLE-COMMAND OVERFLOW. A FULL 1 → 55 RUN TAKES ABOUT 42 SECONDS; THE PLAYER CAN KEEP PLAYING, THEN MUST QUIT THROUGH THE MENU TO SAVE.</p>
       <div class="admin-grid"><div><label for="player-slot">Target client</label><select id="player-slot"><option value="">NO ACTIVE CLIENTS</option></select></div><div><label for="level-target">Target level</label><input id="level-target" type="number" min="1" max="55" value="55"></div></div>
       <div class="actions progress-actions"><button class="primary" id="level-player">Level up</button><button id="unlock-cac">Unlock CAC</button><button id="max-player">Max + repair</button><button class="danger" id="kick">Kick</button></div>
       <div class="power-grid">
@@ -532,12 +545,14 @@ WEB_PAGE = r"""<!doctype html>
 <script>
 const csrf=document.querySelector('meta[name="csrf-token"]').content;
 const $=id=>document.getElementById(id);let latest=null,settingsData=null;
+const playerActionIds=['level-player','unlock-cac','max-player','kick','godmode-on','godmode-off','aimbot-on','aimbot-off','wallhack-on','wallhack-off'];
 async function api(path,body){const options=body?{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify(body)}:{};const response=await fetch(path,options);const data=await response.json();if(!response.ok)throw new Error(data.error||response.statusText);return data}
 function option(select,value,label){const node=document.createElement('option');node.value=value;node.textContent=label;select.append(node)}
+function syncPlayerControls(){const disabled=!$('player-slot').value;playerActionIds.forEach(id=>$(id).disabled=disabled)}
 function render(data){latest=data;$('health').textContent=`LINK UP // ${data.hostname} // ${data.server}`;$('health').className='live';$('current-map').textContent=data.map;$('current-mode').textContent=data.modeLabel;$('player-count').textContent=`${data.players.length} / ${data.maxPlayers}`;$('uptime').textContent=data.uptime;
   if(!$('map').options.length){data.maps.forEach(name=>option($('map'),name,name));data.modes.forEach(mode=>option($('mode'),mode.value,mode.label));$('map').value=data.map;$('mode').value=data.mode}
   const list=$('players');list.replaceChildren();if(!data.players.length){const item=document.createElement('li');item.className='muted';item.textContent='NO CLIENTS CONNECTED';list.append(item)}else data.players.forEach(player=>{const item=document.createElement('li');const slot=document.createElement('span');slot.className='slot';slot.textContent=player.slot===null?'[--]':`[${String(player.slot).padStart(2,'0')}]`;const name=document.createElement('span');name.textContent=player.name;const score=document.createElement('span');score.textContent=`${player.score} XP`;const ping=document.createElement('span');ping.className='muted';ping.textContent=`${player.ping}ms`;item.append(slot,name,score,ping);list.append(item)});
-  const target=$('player-slot'),selected=target.value;target.replaceChildren();const controllable=data.players.filter(player=>player.slot!==null);if(!controllable.length)option(target,'','NO ACTIVE CLIENTS');else controllable.forEach(player=>option(target,String(player.slot),`[${player.slot}] ${player.name}`));if([...target.options].some(node=>node.value===selected))target.value=selected;const disabled=!controllable.length;['level-player','unlock-cac','max-player','kick','godmode-on','godmode-off','aimbot-on','aimbot-off','wallhack-on','wallhack-off'].forEach(id=>$(id).disabled=disabled)}
+  const target=$('player-slot'),selected=target.value;target.replaceChildren();const controllable=data.players.filter(player=>player.slot!==null);if(!controllable.length)option(target,'','NO ACTIVE CLIENTS');else{option(target,'','SELECT TARGET // REQUIRED');controllable.forEach(player=>option(target,String(player.slot),`[${player.slot}] ${player.name}`))}if([...target.options].some(node=>node.value===selected))target.value=selected;syncPlayerControls()}
 function renderSettings(data){settingsData=data;for(const [name,value] of Object.entries(data.values)){const node=$(name);if(!node)continue;if(node.type==='checkbox')node.checked=value==='1';else node.value=value}renderRules();$('settings-state').textContent='Settings loaded';$('settings-state').className='muted'}
 function renderRules(){if(!settingsData)return;const rule=settingsData.rules[$('mode').value];if(rule){$('score-limit').value=rule.scoreLimit;$('time-limit').value=rule.timeLimit}}
 async function refresh(){try{render(await api('/api/status'))}catch(error){$('health').textContent=error.message;$('health').className='error'}}
@@ -545,7 +560,7 @@ async function refreshSettings(){try{renderSettings(await api('/api/settings'))}
 async function action(path,body){try{$('output').textContent='Running…';const data=await api(path,body);$('output').textContent=data.output||'OK';setTimeout(refresh,900)}catch(error){$('output').textContent=`Error: ${error.message}`}}
 function playerAction(operation){return action('/api/progression',{slot:$('player-slot').value,operation,level:$('level-target').value})}
 function powerAction(power,state){return action('/api/power',{slot:$('player-slot').value,power,state})}
-$('apply').onclick=()=>action('/api/match',{map:$('map').value,mode:$('mode').value});$('restart').onclick=()=>action('/api/restart',{});$('rotate').onclick=()=>action('/api/rotate',{});$('mode').onchange=renderRules;
+$('apply').onclick=()=>action('/api/match',{map:$('map').value,mode:$('mode').value});$('restart').onclick=()=>action('/api/restart',{});$('rotate').onclick=()=>action('/api/rotate',{});$('mode').onchange=renderRules;$('player-slot').onchange=syncPlayerControls;
 $('apply-settings').onclick=async()=>{const values={};document.querySelectorAll('[data-setting]').forEach(node=>values[node.id]=node.type==='checkbox'?node.checked:node.value);$('settings-state').textContent='Applying…';try{const data=await api('/api/settings',{settings:values,mode:$('mode').value,scoreLimit:$('score-limit').value,timeLimit:$('time-limit').value});$('output').textContent=data.output||'Settings applied.';$('settings-state').textContent='Applied';await refreshSettings()}catch(error){$('settings-state').textContent=error.message;$('settings-state').className='error'}};
 $('announce').onclick=()=>action('/api/say',{message:$('message').value});$('level-player').onclick=()=>playerAction('level');$('unlock-cac').onclick=()=>playerAction('cac');$('max-player').onclick=()=>playerAction('max');$('kick').onclick=()=>action('/api/kick',{slot:$('player-slot').value});['godmode','aimbot','wallhack'].forEach(power=>{ $(power+'-on').onclick=()=>powerAction(power,'on');$(power+'-off').onclick=()=>powerAction(power,'off')});$('send').onclick=()=>action('/api/command',{command:$('command').value});$('command').onkeydown=event=>{if(event.key==='Enter')$('send').click()};$('message').onkeydown=event=>{if(event.key==='Enter')$('announce').click()};refresh().then(refreshSettings);setInterval(refresh,5000);
 </script></body></html>"""

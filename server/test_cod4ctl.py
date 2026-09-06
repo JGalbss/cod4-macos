@@ -108,9 +108,17 @@ class ControllerTests(unittest.TestCase):
     def test_progression_commands_target_validated_slot(self):
         connection = self.FakeConnection()
         controller = cod4ctl.Controller(connection, ())
-        self.assertEqual(controller.player_progression(2, "level", 10), "accepted")
+        self.assertEqual(
+            controller.player_progression(2, "level", 10),
+            "Level 10 queued safely. Promotions are rate-limited; level 1 to 55 "
+            "takes about 42 seconds.\naccepted",
+        )
         controller.player_progression(2, "cac")
-        controller.player_progression(2, "max")
+        self.assertEqual(
+            controller.player_progression(2, "max"),
+            "Max-rank repair queued safely. Every unlock tier will be replayed in "
+            "about 42 seconds.\naccepted",
+        )
         self.assertEqual(
             connection.commands,
             ["cmd setlevel:2:10", "cmd unlockcac:2", "cmd maxrank:2"],
