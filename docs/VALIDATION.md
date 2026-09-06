@@ -109,11 +109,20 @@ complete compatibility. Results below were observed during development through
   public commit `3dfcd32be2175f7c53a6ca60cb18cc0a85ccda76`.
 - The car-effect audit found no missing asset. The observed car debris and
   shellshock are authored effects, not a missing-resource fallback.
-- The dedicated server loads a private `mod.ff` containing the three retail
-  radiation shellshock definitions used by New Experience's nuke. After the
-  zone loaded, all `radiation_low`, `radiation_med`, and `radiation_high`
-  missing-rawfile/config errors disappeared. The retail-derived zone remains
-  outside source control and public release artifacts.
+- New Experience's nuke uses the stock multiplayer `default` shellshock in
+  place of its three single-player-only radiation definitions. This removes
+  the missing-radiation errors without advertising a private `mod.ff` as a
+  mandatory client download.
+- The exact installed 0.2.7/build-9 package completed a clean-profile live join
+  after the server stopped advertising that private `mod.ff`. It negotiated
+  protocol 21, received a snapshot, entered active play, and exited without a
+  parser error or connection loss. Evidence is in
+  `/tmp/jgalbs-027-live-join.l60HrN`.
+- A focused next-build probe then temporarily restored the 650-byte server
+  `mod.ff`. The patched client downloaded it once over HTTP, installed it under
+  `fs_homepath`, found it after the filesystem restart, and entered active play
+  instead of requesting it repeatedly. Evidence is in
+  `/tmp/jgalbs-mod-download-fixed.Oq3UlY`.
 - The exact post-LP64-fix raw executable SHA-256 is
   `bd05e3552de2b5f43e1ca1628f8f61911a71dbe3cad9f46a10182528da5fa863`.
   It loaded the custom `mp_mw2_term` map into active gameplay for 600 frames,

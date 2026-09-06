@@ -15,22 +15,7 @@ plane is one standard-library Python program that provides:
 ## Install
 
 Copy legally owned dedicated-server data into `/opt/cod4/main` and
-`/opt/cod4/zone/english`. New Experience's nuke also references the retail
-single-player radiation shellshock definitions. Build their small private
-runtime zone locally, then stage it before running `configure.sh`:
-
-```bash
-COD4_DATA='/absolute/path/to/Call of Duty 4' \
-  server/build-private-runtime-zone.sh /tmp/jgalbs-runtime-mod.ff
-scp /tmp/jgalbs-runtime-mod.ff root@SERVER:/opt/cod4/private-assets/mod.ff
-```
-
-This requires OpenAssetTools' `Unlinker` and `Linker` under
-`build/OpenAssetTools/build/bin/Release_x64`, or their paths in
-`OAT_UNLINKER` and `OAT_LINKER`. The generated `mod.ff` contains retail data:
-keep it private and never commit it or attach it to a public release.
-
-On a new Ubuntu host, review the scripts and run:
+`/opt/cod4/zone/english`. On a new Ubuntu host, review the scripts and run:
 
 ```bash
 sudo server/provision.sh
@@ -65,10 +50,17 @@ target's current server session and can always be revoked from the dashboard.
 Terminal, Highrise and Scrapyard. See [`MAPS.md`](MAPS.md) for the compatibility
 rule and the status of Wasteland and Afghan.
 
+New Experience references three shellshock definitions that only ship in a
+single-player zone. `configure.sh` patches its nuke to use the stock multiplayer
+`default` shellshock instead. Do not install a private `mod.ff` as a workaround:
+CoD4X advertises it as a required client file, so every player must download it
+before joining.
+
 ## Test
 
 ```bash
-python3 -m unittest server/test_cod4ctl.py server/test_patch_progression.py
+python3 -m unittest server/test_cod4ctl.py server/test_patch_progression.py \
+  server/test_patch_runtime_assets.py
 bash -n server/*.sh
 ```
 

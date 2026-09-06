@@ -588,20 +588,41 @@ void __cdecl DB_GetVertexBufferAndOffset(uint8_t zoneHandle, _BYTE *verts, void 
     *vb = g_zones[zoneHandle].mem.vertexBuffer;
 }
 
-void __cdecl DB_BuildOSPath_Mod(const char *zoneName, uint32_t size, char *filename)
+static const char *DB_ModHomePath()
 {
-    char *v3; // eax
+    if (fs_homepath && fs_homepath->current.string && *fs_homepath->current.string)
+        return fs_homepath->current.string;
+    return Sys_DefaultInstallPath();
+}
+
+static const char *DB_ModBasePath()
+{
+    if (fs_basepath && fs_basepath->current.string && *fs_basepath->current.string)
+        return fs_basepath->current.string;
+    return Sys_DefaultInstallPath();
+}
+
+static void DB_BuildOSPath_ModAtPath(
+    const char *rootPath, const char *zoneName, uint32_t size, char *filename)
+{
     const char *string; // [esp-8h] [ebp-8h]
 
     if (!fs_gameDirVar->current.string || !*fs_gameDirVar->current.string)
         MyAssertHandler(".\\database\\db_registry.cpp", 3204, 0, "%s", "IsUsingMods()");
     string = fs_gameDirVar->current.string;
-    v3 = Sys_DefaultInstallPath();
 #if defined(_WIN32)
-    Com_sprintf(filename, size, "%s\\%s\\%s.ff", v3, string, zoneName);
+    Com_sprintf(filename, size, "%s\\%s\\%s.ff", rootPath, string, zoneName);
 #else
-    Com_sprintf(filename, size, "%s/%s/%s.ff", v3, string, zoneName);   // see DB_BuildOSPath
+    Com_sprintf(filename, size, "%s/%s/%s.ff", rootPath, string, zoneName);
 #endif
+}
+
+void __cdecl DB_BuildOSPath_Mod(const char *zoneName, uint32_t size, char *filename)
+{
+    // Server downloads are written below fs_homepath. Looking only below the
+    // app/default install path made a valid mod.ff invisible after download,
+    // causing an endless download -> FS_Restart -> download loop.
+    DB_BuildOSPath_ModAtPath(DB_ModHomePath(), zoneName, size, filename);
 }
 
 static const char *DB_UserMapHomePath()
@@ -647,6 +668,11 @@ bool __cdecl DB_ModFileExists()
     // for stdio fopen/fclose so this compiles outside Win32; semantics are
     // the same (only checks for existence).
     FILE *f = std::fopen(filename, "rb");
+    if (!f && I_stricmp(DB_ModHomePath(), DB_ModBasePath()))
+    {
+        DB_BuildOSPath_ModAtPath(DB_ModBasePath(), "mod", sizeof(filename), filename);
+        f = std::fopen(filename, "rb");
+    }
     if (!f) return 0;
     std::fclose(f);
     return 1;
@@ -2784,6 +2810,12 @@ int32_t __cdecl DB_TryLoadXFileInternal(char *zoneName, int32_t zoneFlags)
         {
             DB_BuildOSPath_Mod(zoneName, 256, filename);
             zoneFile = try_open(filename);
+            if (!zoneFile && I_stricmp(DB_ModHomePath(), DB_ModBasePath()))
+            {
+                DB_BuildOSPath_ModAtPath(
+                    DB_ModBasePath(), zoneName, sizeof(filename), filename);
+                zoneFile = try_open(filename);
+            }
             modZone = zoneFile != nullptr;
         }
         else
@@ -3423,6 +3455,11 @@ int32_t __cdecl DB_FileSize(const char *zoneName, int32_t isMod)
     // KISAKHACK-AUDIT(db-filesize-posix): swap CreateFileA/GetFileSize for
     // stdio fseek/ftell.
     FILE *fp = std::fopen(filename, "rb");
+    if (!fp && isMod == 1 && I_stricmp(DB_ModHomePath(), DB_ModBasePath()))
+    {
+        DB_BuildOSPath_ModAtPath(DB_ModBasePath(), zoneName, sizeof(filename), filename);
+        fp = std::fopen(filename, "rb");
+    }
     if (!fp && isMod == 2)
     {
         const char *homePath = DB_UserMapHomePath();
