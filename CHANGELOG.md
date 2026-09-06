@@ -7,6 +7,14 @@ The project uses semantic versioning while the port is under active development.
 
 No user-facing changes yet.
 
+## 0.2.8 release candidate - 2026-09-05
+
+### Fixed
+
+- Disabled the renderer's missing-light-grid visualization in normal builds.
+  First-person weapons and sleeves now use the map's fallback lighting outside
+  authored light-grid coverage instead of flashing rainbow debug colors.
+
 ## 0.2.7 release candidate - 2026-09-05
 
 ### Fixed

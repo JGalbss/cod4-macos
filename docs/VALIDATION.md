@@ -2,13 +2,18 @@
 
 This is an evidence ledger for the native Apple Silicon client, not a claim of
 complete compatibility. Results below were observed during development through
-2026-09-04.
+2026-09-05.
 
 ## Observed working paths
 
 - The built client is a native arm64 Mach-O with a macOS 15.5 deployment target.
 - The native renderer presents through Metal without Wine, DXVK, Vulkan, or
   MoltenVK.
+- The installed 0.2.8/build-10 app traversed `mp_scrapyard` with scripted
+  movement and camera input while `r_showMissingLightGrid` reported both a
+  current and default value of `0`. The captured first-person weapon and sleeves
+  retained neutral map lighting with no rainbow debug sentinel, and the client
+  exited cleanly. Evidence is in `/tmp/jgalbs-0.2.8-installed.nmUuq4`.
 - Profile creation, menus, textured UI, map loading, keyboard/mouse input,
   audio, local hosting, and remote joining have run on Apple Silicon.
 - The **jgalbs** default Favorite was added to an exact copy of a user's valid
