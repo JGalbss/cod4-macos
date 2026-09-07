@@ -143,7 +143,11 @@ void __cdecl Com_SetPlayerProfile(int localClientNum, char *profileName)
 #endif
     Com_ExecStartupConfigs(localClientNum, configFile);
     name = Dvar_GetVariantString("name");
-    if (!name || !*name)
+    // An early native-input validation accidentally ran against the normal
+    // profile and archived its sentinel as the multiplayer name. Repair only
+    // that known diagnostic value; legitimate custom player names remain
+    // independent from the profile-directory name, matching stock behavior.
+    if (!name || !*name || !I_stricmp(name, "NativeInputCheck"))
         Dvar_SetStringByName("name", profileName);
     LiveStorage_NewUser();
 }

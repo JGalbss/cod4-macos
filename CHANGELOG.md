@@ -7,6 +7,19 @@ The project uses semantic versioning while the port is under active development.
 
 No user-facing changes yet.
 
+## 0.2.9 release candidate - 2026-09-06
+
+### Fixed
+
+- Restored the configured expiry time for level-up, kill-streak, and other
+  `iPrintLn`/`iPrintLnBold` notifications instead of misreading the message
+  window's integer line-count setting as a floating-point duration.
+- Made smoke visibility blockers occupy the same zero-based slots consumed by
+  friendly-name and aim-assist visibility checks, so gameplay overlays and
+  targeting no longer remain active through the first smoke cloud.
+- Repaired the leaked `NativeInputCheck` diagnostic player name back to the
+  active profile name without changing legitimate custom multiplayer names.
+
 ## 0.2.8 release candidate - 2026-09-05
 
 ### Fixed

@@ -63,6 +63,7 @@ jobs:
         shell: zsh {0}
         run: |
           set -euo pipefail
+          mac/tools/check-native-regressions.zsh
           cmake -S . -B build-ci -G Ninja \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \

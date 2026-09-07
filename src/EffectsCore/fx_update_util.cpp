@@ -1,5 +1,8 @@
 #include "fx_system.h"
 
+#include <algorithm>
+#include <cstdlib>
+
 int32_t warnCount_1;
 
 void __cdecl FX_OffsetSpawnOrigin(
@@ -396,7 +399,12 @@ void __cdecl FX_AddVisBlocker(FxSystem *system, const float *posWorld, float rad
     FxVisBlocker *localVisBlocker; // [esp+24h] [ebp-4h]
 
     visState = system->visStateBufferWrite;
-    blockerIndex = visState->blockerCount + 1;
+    // Readers consume blocker[0..blockerCount).  The old +1 stored the first
+    // smoke blocker in slot 1 while readers inspected the untouched slot 0,
+    // which let names and aim-assist visibility survive through a lone smoke
+    // cloud. FX_GenerateVerts owns this write buffer for the duration of the
+    // worker command, so fill the zero-based slot before publishing the count.
+    blockerIndex = visState->blockerCount;
     if (blockerIndex < 256)
     {
         localVisBlocker = &visState->blocker[blockerIndex];
@@ -439,6 +447,34 @@ void __cdecl FX_ToggleVisBlockerFrame(FxSystem *system)
     system->visStateBufferWrite = visStateSwapCache;
     system->visStateBufferWrite->blockerCount = 0;
     fx_serverVisClient = system->localClientNum;
+
+    // Deterministic retail-data validation for the macOS smoke test. This is
+    // dormant in normal play and proves that a generated smoke blocker is both
+    // present in slot zero and consumed by the public visibility query.
+    static bool selfTestReported = false;
+    static const bool selfTestEnabled = std::getenv("KISAK_FX_VIS_SELFTEST") != nullptr;
+    if (!selfTestReported && selfTestEnabled
+        && system->visStateBufferRead->blockerCount > 0)
+    {
+        const FxVisBlocker &blocker = system->visStateBufferRead->blocker[0];
+        const float radius = static_cast<float>(blocker.radius) * 0.0625f;
+        if (radius > 0.0f)
+        {
+            const float span = std::max(radius * 2.0f,
+                                        fx_visMinTraceDist->current.value + 1.0f);
+            float start[3] = { blocker.origin[0] - span, blocker.origin[1], blocker.origin[2] };
+            float end[3] = { blocker.origin[0] + span, blocker.origin[1], blocker.origin[2] };
+            const double visibility = FX_GetClientVisibility(system->localClientNum, start, end);
+            if (visibility < 0.99999)
+            {
+                selfTestReported = true;
+                Com_Printf(21,
+                           "[fx-vis-test] slot=0 blockers=%d radius=%.3f encoded=%u trace=%.6f\n",
+                           system->visStateBufferRead->blockerCount, radius,
+                           blocker.visibility, visibility);
+            }
+        }
+    }
 }
 
 char __cdecl FX_CullSphere(const FxCamera *camera, uint32_t frustumPlaneCount, const float *posWorld, float radius)

@@ -1239,7 +1239,12 @@ int32_t __cdecl Con_GetDefaultMsgDuration(print_msg_dest_t dest)
                 0,
                 "%s",
                 "dest >= CON_DEST_GAME_FIRST && dest <= CON_DEST_GAME_LAST");
-        return SnapFloatToInt(con_gameMsgWindowNLineCount[dest - CON_DEST_GAME_FIRST]->current.value * 1000.0f);
+        // Game message lifetime is configured independently from the number of
+        // lines in the destination window.  Reading the integer line-count dvar
+        // through the float member of its value union produced an effectively
+        // arbitrary duration on LP64, so iPrintLn/iPrintLnBold notifications
+        // such as level-up and kill-streak text could remain on screen.
+        return SnapFloatToInt(con_gameMsgWindowNMsgTime[dest - CON_DEST_GAME_FIRST]->current.value * 1000.0f);
     }
 }
 
