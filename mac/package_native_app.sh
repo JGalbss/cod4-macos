@@ -16,6 +16,9 @@ release_readme="${repo_dir}/mac/RELEASE_README.txt"
 gpl_license="${repo_dir}/LICENSE"
 project_notice="${repo_dir}/NOTICE"
 third_party_notices="${repo_dir}/THIRD_PARTY_NOTICES.txt"
+community_maps_source="${COMMUNITY_MAPS_SOURCE:-}"
+community_maps_manifest="${repo_dir}/mac/community-maps.sha256"
+community_maps_notice="${repo_dir}/mac/COMMUNITY_MAPS_NOTICE.txt"
 output_dir="${repo_dir}/dist"
 stage_dir="$(mktemp -d "${TMPDIR:-/tmp}/cod4-native-package.XXXXXX")"
 stage_app="${stage_dir}/${app_bundle}"
@@ -74,7 +77,8 @@ cp "${native_binary}" "${stage_app}/Contents/MacOS/${executable_name}"
 chmod 755 "${stage_app}/Contents/MacOS/${executable_name}"
 
 # Build a complete Retina icon family from the explicitly supplied authorized image.
-# Retail game data is never copied into the application.
+# Retail game data is never copied into the application. An explicitly supplied,
+# checksum-pinned community-map directory can be staged separately below.
 iconset_dir="${stage_dir}/jgalbs-cod4.iconset"
 rounded_icon="${stage_dir}/jgalbs-cod4-rounded.png"
 mkdir -p "${iconset_dir}"
@@ -101,6 +105,37 @@ cp "${release_readme}" "${stage_app}/Contents/Resources/README.txt"
 cp "${gpl_license}" "${stage_app}/Contents/Resources/GPL-3.0.txt"
 cp "${project_notice}" "${stage_app}/Contents/Resources/NOTICE.txt"
 cp "${third_party_notices}" "${stage_app}/Contents/Resources/THIRD-PARTY-NOTICES.txt"
+if [[ -n "${community_maps_source}" ]]; then
+    if [[ ! -d "${community_maps_source}/usermaps" ]]; then
+        print -u2 "COMMUNITY_MAPS_SOURCE must contain a usermaps directory: ${community_maps_source}"
+        exit 1
+    fi
+    if [[ ! -f "${community_maps_manifest}" || ! -f "${community_maps_notice}" ]]; then
+        print -u2 "Community-map manifest or notice is missing."
+        exit 1
+    fi
+    if ! (cd "${community_maps_source}" && shasum -a 256 -c "${community_maps_manifest}"); then
+        print -u2 "Community-map source failed the pinned checksum manifest."
+        exit 1
+    fi
+
+    community_maps_root="${stage_app}/Contents/Resources/CommunityMaps"
+    mkdir -p "${community_maps_root}"
+    while read -r expected_hash relative_path; do
+        [[ -n "${expected_hash}" && -n "${relative_path}" ]] || continue
+        case "${relative_path}" in
+            (usermaps/mp_mw2_rust/*|usermaps/mp_mw2_term/*|usermaps/mp_scrapyard/*) ;;
+            (*)
+                print -u2 "Community-map manifest contains an unapproved path: ${relative_path}"
+                exit 1 ;;
+        esac
+        destination="${community_maps_root}/${relative_path}"
+        mkdir -p "${destination:h}"
+        cp "${community_maps_source}/${relative_path}" "${destination}"
+    done <"${community_maps_manifest}"
+    cp "${community_maps_manifest}" "${community_maps_root}/SHA256SUMS.txt"
+    cp "${community_maps_notice}" "${community_maps_root}/NOTICE.txt"
+fi
 cp "${repo_dir}/deps/ode/LICENSE-BSD.TXT" \
     "${stage_app}/Contents/Resources/ODE-LICENSE-BSD.txt"
 cp "${repo_dir}/deps/speex/COPYING" \
@@ -276,6 +311,9 @@ cp "${release_readme}" "${dmg_stage}/README.txt"
 cp "${gpl_license}" "${dmg_stage}/GPL-3.0.txt"
 cp "${project_notice}" "${dmg_stage}/NOTICE.txt"
 cp "${third_party_notices}" "${dmg_stage}/THIRD-PARTY-NOTICES.txt"
+if [[ -n "${community_maps_source}" ]]; then
+    cp "${community_maps_notice}" "${dmg_stage}/COMMUNITY-MAPS-NOTICE.txt"
+fi
 cp "${output_dir}/${app_bundle}/Contents/Resources/SOURCE-NOTICE.txt" \
     "${dmg_stage}/SOURCE-NOTICE.txt"
 hdiutil create -quiet -volname "${product_name}" -srcfolder "${dmg_stage}" \

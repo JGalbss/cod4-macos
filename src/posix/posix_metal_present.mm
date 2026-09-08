@@ -7207,6 +7207,96 @@ bool ContainsRetailData(NSString *directory)
     return [[NSFileManager defaultManager] isReadableFileAtPath:sentinel];
 }
 
+bool InstallBundledCommunityMaps(NSURL *writable)
+{
+    NSFileManager *const fileManager = [NSFileManager defaultManager];
+    NSURL *const resources = [NSBundle mainBundle].resourceURL;
+    NSURL *const sourceRoot = [[resources URLByAppendingPathComponent:@"CommunityMaps"
+                                                          isDirectory:YES]
+        URLByAppendingPathComponent:@"usermaps" isDirectory:YES];
+    BOOL sourceIsDirectory = NO;
+    if (!sourceRoot || ![fileManager fileExistsAtPath:sourceRoot.path
+                                          isDirectory:&sourceIsDirectory]
+                    || !sourceIsDirectory)
+    {
+        return true;
+    }
+
+    NSArray<NSString *> *const relativePaths = @[
+        @"mp_mw2_rust/mp_mw2_rust.ff",
+        @"mp_mw2_rust/mp_mw2_rust_load.ff",
+        @"mp_mw2_rust/mp_mw2_rust.iwd",
+        @"mp_mw2_term/mp_mw2_term.ff",
+        @"mp_mw2_term/mp_mw2_term_load.ff",
+        @"mp_mw2_term/mp_mw2_term.iwd",
+        @"mp_scrapyard/mp_scrapyard.ff",
+        @"mp_scrapyard/mp_scrapyard_load.ff",
+        @"mp_scrapyard/mp_scrapyard.iwd"
+    ];
+    NSURL *const destinationRoot = [writable URLByAppendingPathComponent:@"usermaps"
+                                                             isDirectory:YES];
+    NSUInteger installed = 0;
+    for (NSString *const relativePath in relativePaths)
+    {
+        NSURL *const source = [sourceRoot URLByAppendingPathComponent:relativePath];
+        NSURL *const destination = [destinationRoot URLByAppendingPathComponent:relativePath];
+        NSDictionary *const sourceAttributes = [fileManager attributesOfItemAtPath:source.path
+                                                                              error:nil];
+        if (!sourceAttributes)
+        {
+            std::fprintf(stderr, "Bundled community map is missing: %s\n",
+                         relativePath.UTF8String);
+            return false;
+        }
+        NSDictionary *const destinationAttributes =
+            [fileManager attributesOfItemAtPath:destination.path error:nil];
+        if (destinationAttributes
+            && [destinationAttributes fileSize] == [sourceAttributes fileSize])
+        {
+            continue;
+        }
+
+        NSError *error = nil;
+        if (![fileManager createDirectoryAtURL:[destination URLByDeletingLastPathComponent]
+                   withIntermediateDirectories:YES
+                                    attributes:nil
+                                         error:&error])
+        {
+            std::fprintf(stderr, "Could not create community-map folder: %s\n",
+                         error.localizedDescription.UTF8String);
+            return false;
+        }
+
+        NSURL *const temporary = [destination URLByAppendingPathExtension:@"jgalbs-new"];
+        [fileManager removeItemAtURL:temporary error:nil];
+        if (![fileManager copyItemAtURL:source toURL:temporary error:&error])
+        {
+            std::fprintf(stderr, "Could not stage bundled community map: %s\n",
+                         error.localizedDescription.UTF8String);
+            return false;
+        }
+        if ([fileManager fileExistsAtPath:destination.path]
+            && ![fileManager removeItemAtURL:destination error:&error])
+        {
+            [fileManager removeItemAtURL:temporary error:nil];
+            std::fprintf(stderr, "Could not replace installed community map: %s\n",
+                         error.localizedDescription.UTF8String);
+            return false;
+        }
+        if (![fileManager moveItemAtURL:temporary toURL:destination error:&error])
+        {
+            std::fprintf(stderr, "Could not install bundled community map: %s\n",
+                         error.localizedDescription.UTF8String);
+            return false;
+        }
+        ++installed;
+    }
+    if (installed)
+        std::printf("[community-maps] installed %lu bundled map files\n",
+                    static_cast<unsigned long>(installed));
+    return true;
+}
+
 } // namespace
 
 bool SavedGameDataDirectory(char *path, const std::size_t pathSize)
@@ -7272,6 +7362,8 @@ bool WritableGameDataDirectory(char *path, const std::size_t pathSize)
                          error.localizedDescription.UTF8String);
             return false;
         }
+        if (!InstallBundledCommunityMaps(writable))
+            return false;
         return CopyPath(writable.path, path, pathSize);
     }
 }

@@ -1,0 +1,16 @@
+Bundled community maps
+======================
+
+This package may include pinned copies of these community-created Call of Duty 4 maps:
+
+- MW2 Rust (mp_mw2_rust), by Stendby
+  https://www.customapscod.com/map.php?id=1626
+- Terminal (#mw2) (mp_mw2_term), by -]K6[-Grimm
+  https://www.customapscod.com/map.php?id=1071
+- SPS Scrapyard (#mw2) (mp_scrapyard), by PanzerMan & Dugynight
+  https://www.customapscod.com/map.php?id=1070
+
+These maps are third-party community content. They are not part of this project's
+GPLv3 source code and are not Call of Duty 4 retail game data. Their names and
+credits are reproduced for attribution. The packager verifies every included map
+file against mac/community-maps.sha256 before it creates the application bundle.

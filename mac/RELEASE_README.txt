@@ -10,9 +10,15 @@ Requirements
 - macOS 15.5 or newer
 - A legally owned Call of Duty 4 installation
 
-The application does not include Call of Duty 4 maps, textures, sounds, or
-other retail game data. On first launch, select the Call of Duty 4 directory
+The application does not include Call of Duty 4 retail maps, textures, sounds,
+or other retail game data. On first launch, select the Call of Duty 4 directory
 that contains main/iw_00.iwd.
+
+Community-map builds include checksum-pinned copies of MW2 Rust, Terminal
+(#mw2), and SPS Scrapyard (#mw2). The app installs them into the user's
+Application Support data directory on launch, so joining the jgalbs server does
+not require downloading those maps during the connection. See
+COMMUNITY-MAPS-NOTICE.txt for credits and source links.
 
 Installation
 ------------
@@ -23,7 +29,7 @@ when prompted.
 The jgalbs server is ensured in Favorites for fresh and upgraded profiles.
 Other saved Favorites are preserved and its address is not duplicated.
 CoD4x protocol-21 server downloads are supported with bounded paths and
-checksum verification; downloaded retail/custom content is stored in the
+checksum verification; downloaded custom content is stored in the
 user's Application Support data directory, not inside the application bundle.
 
 Mod compatibility

@@ -7,6 +7,19 @@ The project uses semantic versioning while the port is under active development.
 
 No user-facing changes yet.
 
+## 0.2.10 release candidate - 2026-09-07
+
+### Added
+
+- Added an optional, checksum-pinned community-map payload to release builds.
+  Packaged copies of Rust, Terminal, and Scrapyard seed Application Support on
+  launch, avoiding an in-game download before joining the jgalbs server.
+
+### Changed
+
+- Documented the bundled community maps with author credits and upstream source
+  links while continuing to exclude all Call of Duty 4 retail game data.
+
 ## 0.2.9 release candidate - 2026-09-06
 
 ### Fixed
