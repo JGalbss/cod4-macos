@@ -100,13 +100,13 @@ set sv_floodProtect 1
 // A client missing a map asks the server for it. Left to the game's own UDP
 // transfer that runs at a few KB/s and shares the pipe with everyone playing;
 // with sv_wwwDownload the server instead hands the client a URL and nginx on
-// this box (maps.sh) serves the file at line rate. sv_wwwDlDisconnected 0
-// keeps the client's slot through the download so it lands straight in the
-// game afterwards rather than reconnecting.
+// this box (maps.sh) serves the file at line rate. Disconnect the game session
+// during a long HTTP transfer and reconnect afterwards so snapshots and
+// reliable commands cannot cycle out while a slower client downloads a map.
 set sv_allowDownload 1
 set sv_wwwDownload 1
 set sv_wwwBaseURL "$WWW_URL"
-set sv_wwwDlDisconnected 0
+set sv_wwwDlDisconnected 1
 
 set sv_mapRotation "$ROTATION"
 EOF
