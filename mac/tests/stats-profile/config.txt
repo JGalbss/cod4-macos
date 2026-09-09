@@ -1,0 +1,4 @@
+seta name "StatsSaveTest"
+seta r_fullscreen "0"
+seta r_mode "800x600"
+seta com_maxfps "60"

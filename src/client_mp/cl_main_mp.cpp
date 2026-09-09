@@ -611,6 +611,10 @@ void __cdecl CL_Disconnect(int32_t localClientNum)
             cl_connectedToPureServer = 0;
             fs_checksumFeed = 0;
             LiveStorage_UploadStats();
+            // A failed save must not cause a second ERR_DROP while disconnecting
+            // from the first one, nor replace the still-dirty stats buffer.
+            if (!LiveStorage_DoWeHaveStats() || !LiveStorage_GetStatBuffer()->statWriteNeeded)
+                LiveStorage_ReadStatsIfDirChanged(fs_gameDirVar->current.string);
         }
     }
 }
@@ -1818,8 +1822,7 @@ char __cdecl CL_DispatchConnectionlessPacket(netsrc_t localClientNum, netadr_t f
                         v18 = (char *)"";
                     else
                         v18 = (char *)Cmd_Argv(1);
-                    if (I_stricmp(v18, fs_gameDirVar->current.string))
-                        LiveStorage_ReadStatsFromDir(v18);
+                    LiveStorage_ReadStatsIfDirChanged(v18);
                     if (localClientNum)
                         MyAssertHandler(
                             "c:\\trees\\cod3\\src\\client_mp\\client_mp.h",
@@ -2296,6 +2299,7 @@ void __cdecl CL_Frame(netsrc_t localClientNum)
         if (connstate < CA_ACTIVE && connstate >= CA_CONNECTED)
             CL_SendCmd(localClientNum);
         CL_CheckForUpdateKeyAuth(localClientNum);
+        LiveStorage_Frame();
 #ifdef KISAK_COD4X
         if (Cod4x_UseExtendedProtocol())
             Cod4x_ReliableFrame(cls.realtime);

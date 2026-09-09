@@ -12,6 +12,10 @@ ${CXX:-c++} -std=c++17 -Wall -Wextra -Werror -fsanitize=undefined \
     -I${repo_root}/src ${repo_root}/mac/tests/text-effects.cpp \
     -o ${text_test_dir}/text-effects
 ${text_test_dir}/text-effects
+${CXX:-c++} -std=c++17 -Wall -Wextra -Werror -fsanitize=undefined \
+    -I${repo_root}/src ${repo_root}/mac/tests/stats-file.cpp \
+    -o ${text_test_dir}/stats-file
+${text_test_dir}/stats-file
 
 console_source=${repo_root}/src/client/cl_console.cpp
 fx_source=${repo_root}/src/EffectsCore/fx_update_util.cpp

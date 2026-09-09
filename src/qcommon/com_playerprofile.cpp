@@ -135,6 +135,7 @@ void __cdecl Com_SetPlayerProfile(int localClientNum, char *profileName)
     iassert( profileName );
     iassert( profileName[0] );
     iassert( com_playerProfile );
+    LiveStorage_NewUser();
     Dvar_SetString((dvar_s *)com_playerProfile, profileName);
 #ifdef KISAK_MP
     Com_BuildPlayerProfilePath(configFile, 64, "config_mp.cfg");
@@ -149,7 +150,6 @@ void __cdecl Com_SetPlayerProfile(int localClientNum, char *profileName)
     // independent from the profile-directory name, matching stock behavior.
     if (!name || !*name || !I_stricmp(name, "NativeInputCheck"))
         Dvar_SetStringByName("name", profileName);
-    LiveStorage_NewUser();
 }
 
 char __cdecl Com_SetInitialPlayerProfile(int localClientNum)

@@ -3,10 +3,14 @@
 #include <stringed/stringed_hooks.h>
 #include <qcommon/com_playerprofile.h>
 #include <universal/com_files.h>
+#include <universal/com_stats_path.h>
 #include <qcommon/cmd.h>
 #include <qcommon/md4.h>
 #include <qcommon/com_bsp.h>
 #include "win_net_debug.h"
+#ifndef _WIN32
+#include <posix/posix_stats_file.h>
+#endif
 
 #ifdef KISAK_MP
 #include <client_mp/client_mp.h>
@@ -17,6 +21,19 @@ const dvar_t *debugStats;
 const dvar_t *stat_version;
 
 playerStatNetworkData statData;
+// The server announces its stats namespace before fs_game switches. Saving
+// against the current fs_game/profile can silently put earned XP in another
+// profile's mpdata, then load the old rank on the next connection.
+static char statsDirectory[260];
+static char statsSavePath[260];
+static unsigned int statsDirtySince;
+
+static void LiveStorage_FlushBeforeReplace()
+{
+    LiveStorage_UploadStats();
+    if (statData.statsFetched && statData.statWriteNeeded)
+        Com_Error(ERR_DROP, "Could not save your progression. Check available disk space and profile-folder permissions, then retry. Your current stats have not been discarded.");
+}
 
 CaCItem cacItems[61] =
 {
@@ -345,19 +362,38 @@ void __cdecl LiveStorage_ReadStats()
     LiveStorage_ReadStatsFromDir((char *)fs_gameDirVar->current.string);
 }
 
-void __cdecl LiveStorage_ReadStatsFromDir(char *directory)
+void __cdecl LiveStorage_ReadStatsIfDirChanged(const char *directory)
+{
+    char path[260];
+    if (!stats_path::ValidDirectory(directory))
+        Com_Error(ERR_DROP, "Invalid progression directory from server");
+    if (!Com_HasPlayerProfile())
+        return;
+    if (Com_BuildPlayerProfilePath(path, sizeof(path), "%s%smpdata",
+        directory ? directory : "", directory && *directory ? "/" : "") >= sizeof(path))
+        Com_Error(ERR_DROP, "Progression profile path is too long");
+    if (!statData.statsFetched || I_stricmp(path, statsSavePath))
+        LiveStorage_ReadStatsFromDir(directory);
+}
+
+void __cdecl LiveStorage_ReadStatsFromDir(const char *directory)
 {
     char path[268]; // [esp+0h] [ebp-2238h] BYREF
     int v2; // [esp+10Ch] [ebp-212Ch]
     StatsFile buffer; // [esp+110h] [ebp-2128h] BYREF
 
+    if (!stats_path::ValidDirectory(directory))
+        Com_Error(ERR_DROP, "Invalid progression directory from server");
+    if (Com_HasPlayerProfile() && Com_BuildPlayerProfilePath(path, 260, "%s%smpdata",
+        directory ? directory : "", directory && *directory ? "/" : "") >= 260)
+        Com_Error(ERR_DROP, "Progression profile path is too long");
+    LiveStorage_FlushBeforeReplace();
     statData.statsFetched = 0;
+    statsSavePath[0] = 0;
     if (Com_HasPlayerProfile())
     {
-        if (directory && *directory)
-            Com_BuildPlayerProfilePath(path, 260, "%s/%s", directory, "mpdata");
-        else
-            Com_BuildPlayerProfilePath(path, 260, "mpdata");
+        I_strncpyz(statsSavePath, path, sizeof(statsSavePath));
+        I_strncpyz(statsDirectory, directory ? directory : "", sizeof(statsDirectory));
         if (LiveStorage_ReadStatsFile(path, buffer.magic, 0x211Cu))
         {
             if (!LiveStorage_DecryptAndCheck(&buffer, directory))
@@ -380,6 +416,9 @@ void __cdecl LiveStorage_ReadStatsFromDir(char *directory)
         {
             LiveStorage_NoStatsFound();
         }
+        if (debugStats && debugStats->current.enabled)
+            Com_Printf(14, "[stats] loaded %s XP=%i rank=%i\n", statsSavePath,
+                LiveStorage_GetStat(0, 2301), LiveStorage_GetStat(0, 2350));
     }
 }
 
@@ -508,7 +547,7 @@ bool __cdecl LiveStorage_ReadStatsFile(const char *qpath, unsigned __int8 *buffe
     int h; // [esp+4h] [ebp-4h] BYREF
 
     FS_CheckFileSystemStarted();
-    if (!qpath && !qpath[0])
+    if (!qpath || !qpath[0])
         MyAssertHandler(".\\win32\\win_storage.cpp", 220, 0, "%s", "qpath || qpath[0]");
     len = FS_FOpenFileRead(qpath, &h);
     if (h && len == lenToRead)
@@ -551,43 +590,62 @@ bool __cdecl LiveStorage_DoWeHaveStats()
 
 void __cdecl LiveStorage_StatsWriteNeeded()
 {
+    if (!statData.statWriteNeeded)
+        statsDirtySince = static_cast<unsigned int>(Sys_Milliseconds());
     statData.statWriteNeeded = 1;
+}
+
+void __cdecl LiveStorage_Frame()
+{
+    // Bound loss on an unexpected exit without writing once per XP/challenge
+    // update. This is a deadline from the first change, not a sliding debounce.
+    if (statData.statsFetched && statData.statWriteNeeded &&
+        static_cast<unsigned int>(Sys_Milliseconds()) - statsDirtySince >= 2000u)
+    {
+        LiveStorage_UploadStats();
+        statsDirtySince = static_cast<unsigned int>(Sys_Milliseconds());
+    }
 }
 
 void __cdecl LiveStorage_UploadStats()
 {
-    char path[264]; // [esp+0h] [ebp-2230h] BYREF
     StatsFile statsFile; // [esp+108h] [ebp-2128h] BYREF
     int v2; // [esp+222Ch] [ebp-4h]
 
     if (statData.statsFetched && statData.statWriteNeeded)
     {
         LiveStorage_WriteChecksumToBuffer(statData.playerStats, 0x2000);
-        if (Com_HasPlayerProfile())
+        if (*statsSavePath)
         {
-            if (*fs_gameDirVar->current.string)
-                Com_BuildPlayerProfilePath(path, 260, "%s/%s", fs_gameDirVar->current.string, "mpdata");
-            else
-                Com_BuildPlayerProfilePath(path, 260, "mpdata");
+            memset(&statsFile, 0, sizeof(statsFile));
             memcpy(statsFile.body.statsData.stats, statData.playerStats, sizeof(statsFile.body.statsData.stats));
-            I_strncpyz(statsFile.body.statsData.path, fs_gameDirVar->current.string, 260);
+            I_strncpyz(statsFile.body.statsData.path, statsDirectory, 260);
             LiveStorage_Encrypt(&statsFile);
-            v2 = FS_WriteFileToDir(path, "players", (char *)&statsFile, 0x211Cu);
-            if (!LiveStorage_DecryptAndCheck(&statsFile, fs_gameDirVar->current.string))
+#ifndef _WIN32
+            char osPath[260];
+            FS_BuildOSPath(fs_homepath->current.string, "players", statsSavePath, osPath);
+            v2 = !FS_CreatePath(osPath) && posix_stats::WriteAtomic(osPath, &statsFile, sizeof(statsFile));
+#else
+            v2 = FS_WriteFileToDir(statsSavePath, "players", (char *)&statsFile, sizeof(statsFile));
+#endif
+            if (!LiveStorage_DecryptAndCheck(&statsFile, statsDirectory))
                 MyAssertHandler(
                     ".\\win32\\win_storage.cpp",
                     359,
                     0,
                     "%s",
-                    "LiveStorage_DecryptAndCheck( &statsFile, fs_gameDirVar->current.string )");
+                    "LiveStorage_DecryptAndCheck( &statsFile, statsDirectory )");
             if (v2)
             {
                 statData.statWriteNeeded = 0;
                 Com_Printf(16, "Successfully wrote stats data\n");
+                if (debugStats && debugStats->current.enabled)
+                    Com_Printf(14, "[stats] saved %s XP=%i rank=%i\n", statsSavePath,
+                        LiveStorage_GetStat(0, 2301), LiveStorage_GetStat(0, 2350));
             }
             else
             {
-                Com_Printf(16, "Unable to write stats: %s.\n", path);
+                Com_PrintError(14, "Unable to save progression: %s. Will retry; check disk space and permissions.\n", statsSavePath);
             }
         }
     }
@@ -706,7 +764,10 @@ void __cdecl LiveStorage_TrySetStatForCmd(int index, unsigned int value)
 
 void __cdecl LiveStorage_NewUser()
 {
-    memset(statData.playerStats, 0, sizeof(statData));
+    LiveStorage_FlushBeforeReplace();
+    memset(&statData, 0, sizeof(statData));
+    statsSavePath[0] = 0;
+    statsDirectory[0] = 0;
 }
 
 cmd_function_s LiveStorage_StatSetCmd_VAR;

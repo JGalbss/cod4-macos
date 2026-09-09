@@ -3,6 +3,26 @@
 This file tracks notable changes to the native Apple Silicon macOS client.
 The project uses semantic versioning while the port is under active development.
 
+## 0.2.12 release candidate - 2026-09-09
+
+### Fixed
+
+- Bound saved XP, rank, unlocks, and challenges to the profile/mod that loaded
+  them, instead of whichever mod happens to be active when saving.
+- Save pending progression before profile/stat reloads and check the loaded
+  stats namespace when reconnecting. Unsaved XP is no longer overwritten by
+  an older on-disk copy during a reload.
+- Autosave changed progression every two seconds during play, in addition to
+  saving on normal disconnect/quit. Native saves use an atomic replacement;
+  failed writes preserve the previous file and retry without clearing dirty stats.
+
+### Tests
+
+- Server-awarded XP survives immediate stat reload, disconnect, app restart,
+  and rejoin in an isolated native-client fixture. A separate test player on
+  the live mod server retained level 10 (2,430 XP) after leaving and relaunching.
+- Added atomic save/replacement, failed-write, and temporary-file cleanup tests.
+
 ## 0.2.11 release candidate - 2026-09-09
 
 ### Fixed

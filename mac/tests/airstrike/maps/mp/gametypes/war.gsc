@@ -93,10 +93,28 @@ onSpawnPlayer()
 	}
 
 	self spawn( spawnPoint.origin, spawnPoint.angles );
-	if ( getDvarInt( "scr_testHudFx" ) )
+	if ( getDvarInt( "scr_testStats" ) )
+		self thread testStatsPersistence();
+	else if ( getDvarInt( "scr_testHudFx" ) )
 		self thread testHudExpiry();
 	else
 		self thread giveTestAirstrike();
+}
+
+// Isolated profile fixture: exercise the real server -> N command -> client
+// mpdata path, not a console statSet (which forbids server-owned XP fields).
+testStatsPersistence()
+{
+	self endon( "disconnect" );
+	print( "[stats-test] joined XP=" + self getStat( 2301 ) + " rank=" + self getStat( 2350 ) + "\n" );
+	if ( getDvarInt( "scr_testStats" ) == 1 )
+	{
+		wait 1;
+		self setStat( 2301, 2430 );
+		self setStat( 2350, 9 );
+		self setStat( 252, 9 );
+		print( "[stats-test] awarded XP=2430 rank=9\n" );
+	}
 }
 
 // Keep both HUD elements alive after the effect deadline: the presenter must
