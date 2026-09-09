@@ -3,11 +3,14 @@
 #include "gfx_d3d/r_dvars.h"
 #include "gfx_d3d/r_font.h"
 #include "gfx_d3d/r_gfx.h"
+#include "gfx_d3d/r_material.h"
 #include "gfx_d3d/r_rendercmds.h"
+#include "gfx_d3d/r_text_context.h"
 #include "gfx_d3d/rb_backend.h"
 #include "gfx_gl/gl_renderer.h"
 #include "posix/posix_gl_texture.h"
 #include "posix/posix_input.h"
+#include "posix/posix_text_effects.h"
 #include "qcommon/qcommon.h"
 #include "ui/keycodes.h"
 #include "universal/com_files.h"
@@ -18,7 +21,6 @@
 #include <atomic>
 #include <cstdio>
 #include <cstring>
-#include <cstdlib>
 #include <cstdlib>
 #include <vector>
 
@@ -56,7 +58,7 @@ const GfxCmdArray *CurrentCommands()
 // the pen, drawn at pixelWidth x pixelHeight, and the pen advances by dx - all in
 // units of the command's scale. The glyph's own s0..t1 index the font's atlas.
 // Draw with the built-in 8x8 font. Crude, but every glyph is the right glyph.
-void DrawTextFallback(const GfxCmdDrawText2D *cmd)
+void DrawTextFallback(const GfxCmdDrawText2D *cmd, const posix_text::EffectState &effect)
 {
     const float charW = 8.0f * cmd->xScale;
     const float charH = 8.0f * cmd->yScale;
@@ -64,15 +66,20 @@ void DrawTextFallback(const GfxCmdDrawText2D *cmd)
                          cmd->color.array[0] / 255.0f,
                          cmd->color.array[1] / 255.0f,
                          cmd->color.array[2] / 255.0f,
-                         cmd->color.array[3] / 255.0f);
+                         cmd->color.array[3] / 255.0f * effect.alpha);
 }
 
-void DrawText(const GfxCmdDrawText2D *cmd)
+void DrawText(const GfxCmdDrawText2D *cmd, int sceneTime)
 {
+    const auto effect = posix_text::EvaluateEffect(
+        cmd->renderFlags, cmd->maxChars, sceneTime, cmd->fxBirthTime,
+        cmd->fxLetterTime, cmd->fxDecayStartTime, cmd->fxDecayDuration);
+    if (!effect.maxChars || effect.alpha <= 0.0f)
+        return;
     const unsigned int atlas = TextureForMaterial(cmd->font->material);
     if (!atlas)
     {
-        DrawTextFallback(cmd);
+        DrawTextFallback(cmd, effect);
         return;
     }
 
@@ -111,7 +118,7 @@ void DrawText(const GfxCmdDrawText2D *cmd)
     const float baseR = cmd->color.array[0] / 255.0f;
     const float baseG = cmd->color.array[1] / 255.0f;
     const float baseB = cmd->color.array[2] / 255.0f;
-    const float a = cmd->color.array[3] / 255.0f;
+    const float a = cmd->color.array[3] / 255.0f * effect.alpha;
     float r = baseR;
     float g = baseG;
     float b = baseB;
@@ -120,7 +127,8 @@ void DrawText(const GfxCmdDrawText2D *cmd)
     const float penY = cmd->y - 0.5f * cmd->yScale;
 
     const char *text = cmd->text;
-    for (int drawn = 0; *text && drawn < cmd->maxChars;)
+    const char *const commandEnd = reinterpret_cast<const char *>(cmd) + cmd->header.byteCount;
+    for (int drawn = 0; text < commandEnd && *text && drawn < effect.maxChars;)
     {
         if (text[0] == '^' && text[1] >= '0' && text[1] <= '9')
         {
@@ -139,6 +147,44 @@ void DrawText(const GfxCmdDrawText2D *cmd)
                 b = inlineColor.array[2] / 255.0f;
             }
             text += 2;
+            continue;
+        }
+
+        if (text[0] == '^'
+            && (static_cast<unsigned char>(text[1]) == CONTXTCMD_TYPE_HUDICON
+                || static_cast<unsigned char>(text[1]) == CONTXTCMD_TYPE_HUDICON_FLIP)
+            && commandEnd - text >= CONTXTCMD_TOTAL_HUDICON)
+        {
+            const unsigned char *const iconCommand =
+                reinterpret_cast<const unsigned char *>(text + 1);
+            Material *iconHandle = nullptr;
+            std::memcpy(&iconHandle,
+                        iconCommand + CONTXTCMD_ARG_HUDICON_MATERIAL,
+                        sizeof(iconHandle));
+            if (IsValidMaterialHandle(iconHandle))
+            {
+                const float iconWidth =
+                    ((cmd->font->pixelHeight * (iconCommand[1] - 16) + 16) / 32.0f)
+                    * cmd->xScale;
+                const float iconHeight =
+                    ((cmd->font->pixelHeight * (iconCommand[2] - 16) + 16) / 32.0f)
+                    * cmd->yScale;
+                const unsigned int iconTexture = TextureForMaterial(Material_FromHandle(iconHandle));
+                if (iconTexture && iconWidth > 0.0f && iconHeight > 0.0f)
+                {
+                    const bool flip = iconCommand[0] == CONTXTCMD_TYPE_HUDICON_FLIP;
+                    const float iconY = cmd->y
+                        - (cmd->font->pixelHeight * cmd->yScale + iconHeight) * 0.5f;
+                    gfx_gl::draw_ui_textured_rect(
+                        penX, iconY, iconWidth, iconHeight,
+                        flip ? 1.0f : 0.0f, 0.0f,
+                        flip ? 0.0f : 1.0f, 1.0f,
+                        iconTexture, r, g, b, a);
+                }
+                penX += iconWidth;
+            }
+            text += CONTXTCMD_TOTAL_HUDICON;
+            ++drawn;
             continue;
         }
 
@@ -173,7 +219,7 @@ void DrawText(const GfxCmdDrawText2D *cmd)
     }
 }
 
-void DispatchCommands(const GfxCmdArray *list)
+void DispatchCommands(const GfxCmdArray *list, int sceneTime)
 {
     if (!list || !list->cmds || list->usedTotal <= 0)
         return;
@@ -225,7 +271,7 @@ void DispatchCommands(const GfxCmdArray *list)
             // text[] is declared short; the engine sizes the command to hold the
             // whole null-terminated string past the end of the array.
             if (cmd->maxChars > 0 && cmd->font)
-                DrawText(cmd);
+                DrawText(cmd, sceneTime);
             break;
         }
         default:
@@ -384,7 +430,9 @@ void PresentFrame()
     if (drawableWidth > 0 && drawableHeight > 0)
         gfx_gl::set_viewport(drawableWidth, drawableHeight);
 
-    DispatchCommands(CurrentCommands());
+    const GfxViewInfo *view = frontEndDataOut && frontEndDataOut->viewInfoCount
+        ? &frontEndDataOut->viewInfo[frontEndDataOut->viewInfoIndex] : nullptr;
+    DispatchCommands(CurrentCommands(), view ? view->sceneDef.time : 0);
     gfx_gl::flush_ui();
 
     static int frame = 0;

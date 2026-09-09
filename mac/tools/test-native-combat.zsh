@@ -15,6 +15,7 @@ combat_host_log=${combat_artifacts}/host.log
 combat_guest_log=${combat_artifacts}/guest.log
 combat_victim_ppm=${combat_artifacts}/victim-killcam.ppm
 combat_victim_png=${combat_artifacts}/victim-killcam.png
+combat_shooter_ppm=${combat_artifacts}/shooter-kill-feed.ppm
 combat_host_pid=
 combat_guest_pid=
 
@@ -91,6 +92,10 @@ KISAK_WINDOW_X=0 \
 KISAK_WINDOW_Y=60 \
 KISAK_COMBAT_TRACE=1 \
 KISAK_GAMEPLAY_TRACE=1 \
+KISAK_HUD_ICON_TRACE=1 \
+KISAK_HUD_FX_TRACE=1 \
+KISAK_METAL_DUMP=${combat_shooter_ppm} \
+KISAK_METAL_DUMP_FRAME=-250 \
 KISAK_METAL_AUTO_JOIN=1 \
 KISAK_AUTOCMD=${combat_host_commands} \
 KISAK_AUTOKEY=${combat_fire_keys} \
@@ -161,6 +166,16 @@ check_native_combat "authoritative death callback ran for every cycle" \
     awk -v want=${combat_cycles} '/\[combat-test\] death victim=1 attacker=0/{++count} END { exit count < want }' ${combat_host_log}
 check_native_combat "attacker score updated" \
     rg -q "\\[combat-test\\] state client=0 .*score=$((combat_cycles * 10))" ${combat_host_log}
+check_native_combat "kill feed resolved its inline weapon icon" \
+    rg -q "\\[metal\\] inline HUD icon '.*' [0-9]+\\.[0-9]x[0-9]+\\.[0-9]" ${combat_host_log}
+if (( combat_cycles >= 3 )); then
+    for combat_award_phase in visible fading expired; do
+        check_native_combat "earned 3-kill award ${combat_award_phase}" \
+            rg -q "\\[hud-fx\\] phase=${combat_award_phase} .*text='3 Kill Streak!'" ${combat_host_log}
+        check_native_combat "radar prompt ${combat_award_phase}" \
+            rg -q "\\[hud-fx\\] phase=${combat_award_phase} .*text='Press 6 for RADAR.'" ${combat_host_log}
+    done
+fi
 check_native_combat "victim entered every killcam" \
     awk -v want=${combat_cycles} '/\[gameplay\] killcam entered: .*target=0/{++count} END { exit count < want }' ${combat_guest_log}
 check_native_combat "victim exited every killcam" \
@@ -191,9 +206,13 @@ check_native_combat "no native fatal/assert path" \
 check_native_combat "killcam player-name substitution resolved" \
     zsh -c '! rg -q "unresolved translated message|Killed by &&1" "$1"' _ ${combat_guest_log}
 check_native_combat "killcam frame captured" test -s ${combat_victim_ppm}
+check_native_combat "kill-feed frame captured" test -s ${combat_shooter_ppm}
 
 if [[ -s ${combat_victim_ppm} ]] && command -v sips >/dev/null; then
     sips -s format png ${combat_victim_ppm} --out ${combat_victim_png} >/dev/null
+fi
+if [[ -s ${combat_shooter_ppm} ]] && command -v sips >/dev/null; then
+    sips -s format png ${combat_shooter_ppm} --out ${combat_artifacts}/shooter-kill-feed.png >/dev/null
 fi
 
 print "Artifacts: ${combat_artifacts}"

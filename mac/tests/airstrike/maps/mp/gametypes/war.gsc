@@ -93,7 +93,38 @@ onSpawnPlayer()
 	}
 
 	self spawn( spawnPoint.origin, spawnPoint.angles );
-	self thread giveTestAirstrike();
+	if ( getDvarInt( "scr_testHudFx" ) )
+		self thread testHudExpiry();
+	else
+		self thread giveTestAirstrike();
+}
+
+// Keep both HUD elements alive after the effect deadline: the presenter must
+// hide the timed award without hiding the untimed label or deleting the element.
+testHudExpiry()
+{
+	self endon( "disconnect" );
+	wait 1;
+	control = newClientHudElem( self );
+	control.horzAlign = "center";
+	control.vertAlign = "middle";
+	control.alignX = "center";
+	control.y = -140;
+	control.fontScale = 2;
+	control setText( "HUD expiry: persistent control" );
+	award = newClientHudElem( self );
+	award.horzAlign = "center";
+	award.vertAlign = "middle";
+	award.alignX = "center";
+	award.y = -100;
+	award.fontScale = 2;
+	award.color = ( 0, 1, 0 );
+	award setText( "HUD expiry: first award" );
+	award setPulseFX( 30, 2500, 1000 );
+	wait 6;
+	award setText( "HUD expiry: next award" );
+	award setPulseFX( 30, 2500, 1000 );
+	// Neither element is destroyed: their different visibility is the assertion.
 }
 
 

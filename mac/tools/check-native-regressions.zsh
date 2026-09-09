@@ -7,6 +7,12 @@ repo_root=${script_dir:h:h}
 
 ${script_dir}/check-dvar-union.sh
 
+text_test_dir=$(mktemp -d /tmp/kisak-text-effects.XXXXXX)
+${CXX:-c++} -std=c++17 -Wall -Wextra -Werror -fsanitize=undefined \
+    -I${repo_root}/src ${repo_root}/mac/tests/text-effects.cpp \
+    -o ${text_test_dir}/text-effects
+${text_test_dir}/text-effects
+
 console_source=${repo_root}/src/client/cl_console.cpp
 fx_source=${repo_root}/src/EffectsCore/fx_update_util.cpp
 profile_source=${repo_root}/src/qcommon/com_playerprofile.cpp

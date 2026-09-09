@@ -3,9 +3,22 @@
 This file tracks notable changes to the native Apple Silicon macOS client.
 The project uses semantic versioning while the port is under active development.
 
-## Unreleased
+## 0.2.11 release candidate - 2026-09-09
 
-No user-facing changes yet.
+### Fixed
+
+- Rendered the inline weapon material in multiplayer death messages instead of
+  displaying the native pointer payload as gibberish in the kill feed.
+- Honored the native text renderer's pulse-effect timings. Kill-streak awards,
+  rank-up messages, and other timed HUD text now reveal, fade, and stop drawing
+  at their deadline, even when the script keeps the HUD element alive.
+  Persistent labels remain visible and subsequent awards start a fresh effect.
+
+### Tests
+
+- Added an in-client expiry test covering two successive timed awards alongside
+  a persistent label, plus timing boundary/overflow tests and kill-feed captures
+  in the two-client combat check.
 
 ## 0.2.10 release candidate - 2026-09-07
 

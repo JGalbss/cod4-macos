@@ -28,6 +28,7 @@
 #include "gfx_d3d/r_rendercmds.h"
 #include "gfx_d3d/r_scene.h"
 #include "gfx_d3d/r_state.h"
+#include "gfx_d3d/r_text_context.h"
 #include "gfx_d3d/r_utils.h"
 #include "gfx_d3d/r_water.h"
 #include "gfx_d3d/r_workercmds.h"
@@ -35,6 +36,7 @@
 #include "gfx_d3d/rb_light.h"
 #include "gfx_d3d/rb_tess.h"
 #include "posix/posix_input.h"
+#include "posix/posix_text_effects.h"
 #include "qcommon/com_pack.h"
 #include "qcommon/cmd.h"
 #include "qcommon/qcommon.h"
@@ -57,6 +59,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <iterator>
 #include <sys/stat.h>
 #include <unordered_map>
@@ -5182,8 +5185,35 @@ void PushMaterialQuad(const Material *material, const GfxColor color,
         PushQuadCorners(QuadMode::Flat, nil, positions, uvs, r, g, b, a);
 }
 
-void DrawText(const GfxCmdDrawText2D *cmd)
+void DrawText(const GfxCmdDrawText2D *cmd, int sceneTime)
 {
+    const auto effect = posix_text::EvaluateEffect(
+        cmd->renderFlags, cmd->maxChars, sceneTime, cmd->fxBirthTime,
+        cmd->fxLetterTime, cmd->fxDecayStartTime, cmd->fxDecayDuration);
+    static const bool traceEffects = std::getenv("KISAK_HUD_FX_TRACE") != nullptr;
+    if (traceEffects && (cmd->renderFlags & 0x40))
+    {
+        struct Trace { int birth; std::string text; unsigned int phases; };
+        static std::vector<Trace> traces;
+        auto found = std::find_if(traces.begin(), traces.end(), [&](const Trace &entry) {
+            return entry.birth == cmd->fxBirthTime && entry.text == cmd->text;
+        });
+        if (found == traces.end() && traces.size() < 64)
+        {
+            traces.push_back({cmd->fxBirthTime, cmd->text, 0});
+            found = traces.end() - 1;
+        }
+        const unsigned int phase = effect.alpha <= 0.0f ? 4 : effect.alpha < 1.0f ? 2 : 1;
+        if (found != traces.end() && !(found->phases & phase))
+        {
+            found->phases |= phase;
+            Com_Printf(8, "[hud-fx] phase=%s birth=%d scene=%d alpha=%.3f text='%.80s'\n",
+                       phase == 4 ? "expired" : phase == 2 ? "fading" : "visible",
+                       cmd->fxBirthTime, sceneTime, effect.alpha, cmd->text);
+        }
+    }
+    if (!effect.maxChars || effect.alpha <= 0.0f)
+        return;
     id<MTLTexture> atlas = TextureForMaterial(cmd->font->material);
     if (!atlas)
         return;
@@ -5191,7 +5221,7 @@ void DrawText(const GfxCmdDrawText2D *cmd)
     const float baseR = cmd->color.array[2] / 255.0f;
     const float baseG = cmd->color.array[1] / 255.0f;
     const float baseB = cmd->color.array[0] / 255.0f;
-    const float a = cmd->color.array[3] / 255.0f;
+    const float a = cmd->color.array[3] / 255.0f * effect.alpha;
     float r = baseR;
     float g = baseG;
     float b = baseB;
@@ -5199,7 +5229,9 @@ void DrawText(const GfxCmdDrawText2D *cmd)
     const float penY = cmd->y - 0.5f * cmd->yScale;
 
     const char *text = cmd->text;
-    for (int drawn = 0; *text && drawn < cmd->maxChars;)
+    const char *const commandEnd = reinterpret_cast<const char *>(cmd) + cmd->header.byteCount;
+    static bool tracedHudIcon = false;
+    for (int drawn = 0; text < commandEnd && *text && drawn < effect.maxChars;)
     {
         // CoD strings embed palette changes as ^0 through ^9.  The D3D
         // backend consumes these control pairs rather than treating them as
@@ -5222,6 +5254,57 @@ void DrawText(const GfxCmdDrawText2D *cmd)
                 b = inlineColor.array[2] / 255.0f;
             }
             text += 2;
+            continue;
+        }
+
+        // Console message strings can contain an inline HUD-image command:
+        // '^', type, encoded width/height, then a native Material pointer.
+        // Death messages use this for the weapon between the two player names.
+        // Treating those bytes as font characters exposed the pointer payload as
+        // gibberish and could stop at a zero byte before the victim name.
+        if (text[0] == '^'
+            && (static_cast<unsigned char>(text[1]) == CONTXTCMD_TYPE_HUDICON
+                || static_cast<unsigned char>(text[1]) == CONTXTCMD_TYPE_HUDICON_FLIP)
+            && commandEnd - text >= CONTXTCMD_TOTAL_HUDICON)
+        {
+            const unsigned char *const iconCommand =
+                reinterpret_cast<const unsigned char *>(text + 1);
+            Material *iconHandle = nullptr;
+            std::memcpy(&iconHandle,
+                        iconCommand + CONTXTCMD_ARG_HUDICON_MATERIAL,
+                        sizeof(iconHandle));
+            if (IsValidMaterialHandle(iconHandle))
+            {
+                const float iconWidth =
+                    ((cmd->font->pixelHeight * (iconCommand[1] - 16) + 16) / 32.0f)
+                    * cmd->xScale;
+                const float iconHeight =
+                    ((cmd->font->pixelHeight * (iconCommand[2] - 16) + 16) / 32.0f)
+                    * cmd->yScale;
+                id<MTLTexture> iconTexture = TextureForMaterial(Material_FromHandle(iconHandle));
+                if (iconTexture && iconWidth > 0.0f && iconHeight > 0.0f)
+                {
+                    const bool flip = iconCommand[0] == CONTXTCMD_TYPE_HUDICON_FLIP;
+                    const float iconY = cmd->y
+                        - (cmd->font->pixelHeight * cmd->yScale + iconHeight) * 0.5f;
+                    PushQuad(QuadMode::Image, iconTexture,
+                             penX, iconY, iconWidth, iconHeight,
+                             flip ? 1.0f : 0.0f, 0.0f,
+                             flip ? 0.0f : 1.0f, 1.0f,
+                             r, g, b, a);
+                }
+                if (iconTexture && iconWidth > 0.0f && iconHeight > 0.0f
+                    && !tracedHudIcon && std::getenv("KISAK_HUD_ICON_TRACE"))
+                {
+                    tracedHudIcon = true;
+                    Com_Printf(8, "[metal] inline HUD icon '%s' %.1fx%.1f\n",
+                               iconHandle->info.name,
+                               iconWidth, iconHeight);
+                }
+                penX += iconWidth;
+            }
+            text += CONTXTCMD_TOTAL_HUDICON;
+            ++drawn;
             continue;
         }
 
@@ -5267,7 +5350,7 @@ void TraceUiMaterial(const GfxCmdStretchPic *cmd)
     }
 }
 
-void DispatchCommands(const GfxCmdArray *list)
+void DispatchCommands(const GfxCmdArray *list, int sceneTime)
 {
     if (!list || !list->cmds || list->usedTotal <= 0)
         return;
@@ -5410,7 +5493,7 @@ void DispatchCommands(const GfxCmdArray *list)
         {
             const auto *cmd = reinterpret_cast<const GfxCmdDrawText2D *>(header);
             if (cmd->maxChars > 0 && cmd->font)
-                DrawText(cmd);
+                DrawText(cmd, sceneTime);
             break;
         }
         default:
@@ -7704,15 +7787,15 @@ void PresentFrame()
         g_batches.clear();
         g_savedScreenCommands.clear();
         const GfxCmdArray *commands = frontEndDataOut ? frontEndDataOut->commands : nullptr;
+        const GfxViewInfo *view = frontEndDataOut && frontEndDataOut->viewInfoCount
+            ? &frontEndDataOut->viewInfo[frontEndDataOut->viewInfoIndex] : nullptr;
         if (!g_hideUi)
-            DispatchCommands(commands);
+            DispatchCommands(commands, view ? view->sceneDef.time : 0);
 
         profileEncodeStart = g_profileRenderer ? CACurrentMediaTime() : 0.0;
         id<MTLCommandBuffer> commandBuffer = [g_queue commandBuffer];
-        const GfxViewInfo *view = nullptr;
-        if (frontEndDataOut && frontEndDataOut->viewInfoCount)
+        if (view)
         {
-            view = &frontEndDataOut->viewInfo[frontEndDataOut->viewInfoIndex];
             if (std::getenv("KISAK_VISION_TRACE"))
             {
                 static float lastFilmDarkGreen = -1.0f;
