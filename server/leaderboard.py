@@ -294,11 +294,20 @@ class LeaderboardStore:
         elif kind == "Q" and len(fields) >= 4:
             self._quit(db, match["id"], at, fields[3])
 
+    def _tracking_since(self, db: sqlite3.Connection) -> int | None:
+        row = db.execute("SELECT value FROM meta WHERE key = 'tracking_since'").fetchone()
+        return int(row["value"]) if row else None
+
     def _init_game(self, db: sqlite3.Connection, info: dict[str, str], offset: int) -> None:
         base_at = parse_map_start(info.get("g_mapStartTime", ""))
         gametype = info.get("g_gametype", "").lower()
         game_map = info.get("mapname", "").lower()
         if base_at is None or not gametype or not game_map:
+            return
+        since = self._tracking_since(db)
+        if since is not None and base_at < since:
+            # Wiped history: a map that started before the wipe never becomes a match again,
+            # even if the log is re-read from the start after a truncation.
             return
         current = self._open_match(db)
         if current is not None and not current["closed"] and current["gametype"] == gametype and current["map"] == game_map:
@@ -471,6 +480,43 @@ class LeaderboardStore:
             db.execute("UPDATE participation SET result = 'win' WHERE match_id = ? AND key = ?", (match["id"], key))
             self._assign_results(db, match["id"])
 
+    # ------------------------------------------------------------------ wipe
+
+    def reset(self) -> dict[str, object]:
+        """Forget everything counted so far and start with the next map. The logs stay untouched;
+        ingestion resumes at their current end, and hidden-player flags survive."""
+        with self._lock:
+            db = self._connection()
+            started = int(time.time())
+            db.execute("BEGIN")
+            try:
+                for table in ("matches", "participation", "weapon_kills", "kill_pairs", "journal"):
+                    db.execute(f"DELETE FROM {table}")
+                db.execute("DELETE FROM players WHERE hidden = 0")
+                db.execute("UPDATE players SET first_seen = NULL, last_seen = NULL")
+                db.execute("DELETE FROM meta WHERE key = 'open_match'")
+                db.execute(
+                    "INSERT INTO meta(key, value) VALUES('tracking_since', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                    (str(started),),
+                )
+                for name, path in (("game_log", self.game_log), ("journal", self.journal)):
+                    try:
+                        stat = path.stat()
+                    except FileNotFoundError:
+                        db.execute("DELETE FROM sources WHERE name = ?", (name,))
+                        continue
+                    db.execute(
+                        "INSERT INTO sources(name, offset, inode, partial) VALUES(?, ?, ?, '') "
+                        "ON CONFLICT(name) DO UPDATE SET offset = excluded.offset, inode = excluded.inode, partial = ''",
+                        (name, stat.st_size, stat.st_ino),
+                    )
+                db.execute("COMMIT")
+            except Exception:
+                db.execute("ROLLBACK")
+                raise
+            self._warning = None
+        return {"trackingSince": iso(started)}
+
     # ------------------------------------------------------------------ roster flags
 
     def set_hidden(self, key: str, hidden: bool, note: str = "") -> None:
@@ -530,7 +576,7 @@ class LeaderboardStore:
             weapons = self._favourite_weapons(db, scope, values)
             roster = {row["key"]: row for row in db.execute("SELECT * FROM players").fetchall()}
             totals = db.execute(f"SELECT COUNT(*) matches FROM matches m WHERE {scope}", values).fetchone()
-            first_match = db.execute("SELECT MIN(started_at) FROM matches").fetchone()[0]
+            first_match = self._tracking_since(db) or db.execute("SELECT MIN(started_at) FROM matches").fetchone()[0]
             warning = self._warning
         players = []
         for row in rows:

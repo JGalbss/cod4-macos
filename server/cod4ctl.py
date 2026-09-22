@@ -464,6 +464,10 @@ class Controller:
         keys = params.get("key") or [""]
         return self.leaderboard_store.player(keys[0], LeaderboardQuery.from_params(params))
 
+    def leaderboard_reset(self) -> str:
+        result = self.leaderboard_store.reset()
+        return f"Leaderboard wiped; counting starts with the next map (tracking since {result['trackingSince']})"
+
     def leaderboard_hide(self, key: object, hidden: object) -> str:
         name = str(key or "").strip()
         if not name or len(name) > 32:
@@ -1044,7 +1048,7 @@ LEADERBOARD_PAGE = r"""<!doctype html>
     .scroll{overflow-x:auto}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;white-space:nowrap}th,td{padding:7px 9px;border-bottom:1px solid var(--line2);text-align:right}th:nth-child(2),td:nth-child(2){text-align:left}th{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;user-select:none;position:sticky;top:0;background:#020704}th:hover{color:var(--ink)}th.active{color:var(--green)}
     tbody tr{cursor:pointer}tbody tr:hover{background:#0b2817}tbody tr.selected{background:#0f3a22}tbody tr.hidden-player{opacity:.55}td.name{font-weight:600;color:#e5ffee}.rank{color:var(--dim)}
     .detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}.detail-grid table{font-size:12px}.detail-grid th{cursor:default}.detail-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-    .win{color:var(--green)}.loss{color:var(--bad)}.tie{color:var(--dim)}
+    .win{color:var(--green)}.loss{color:var(--bad)}.tie{color:var(--dim)}button.danger{border-color:var(--bad);color:var(--bad)}
     @media(max-width:900px){.filters{grid-template-columns:1fr 1fr}}
   </style>
 </head>
@@ -1058,7 +1062,7 @@ LEADERBOARD_PAGE = r"""<!doctype html>
       <div><label for="map">Map</label><select id="map"><option value="">All maps</option></select></div>
       <div><label for="min_matches">Min matches</label><input id="min_matches" type="number" min="0" max="9999" value="1"></div>
       <label class="toggle"><input id="hidden" type="checkbox"> Show bots &amp; test clients</label>
-      <div><button id="refresh" type="button">Refresh</button></div>
+      <div><button id="refresh" type="button">Refresh</button> <button id="wipe" type="button" class="danger" title="Forget all stats and start counting with the next map">Wipe</button></div>
     </div>
     <div class="summary" id="summary">Loading…</div>
   </section>
@@ -1120,6 +1124,7 @@ async function select(key){state.selected=key;document.querySelectorAll('#rows t
 $('detail-close').onclick=()=>{$('detail').hidden=true;state.selected=null;history.replaceState(null,'','/leaderboard?'+params().toString())};
 for(const id of ['window','gametype','map','hidden'])$(id).onchange=load;
 $('min_matches').onchange=load;let typing=null;$('q').oninput=()=>{clearTimeout(typing);typing=setTimeout(load,250)};$('refresh').onclick=load;
+$('wipe').onclick=async()=>{if(!confirm('Wipe every stat and start the leaderboard from the next map? This cannot be undone.'))return;try{const r=await api('/api/leaderboard/reset',{confirm:'wipe'});$('state').textContent=r.output;$('state').className='warn';$('detail').hidden=true;state.selected=null;await load()}catch(error){$('state').textContent=error.message;$('state').className='error'}};
 restore();loadFilters().then(load).then(()=>{if(state.selected)select(state.selected)});setInterval(load,15000);
 </script></body></html>"""
 
@@ -1252,6 +1257,10 @@ def make_handler(controller: Controller, csrf_token: str):
                         output = controller.bot_request(action, body.get("team"), body.get("name"))
                 elif self.path == "/api/leaderboard/hide":
                     output = controller.leaderboard_hide(body.get("key"), body.get("hidden"))
+                elif self.path == "/api/leaderboard/reset":
+                    if body.get("confirm") != "wipe":
+                        raise ControlError("send confirm: wipe to reset the leaderboard")
+                    output = controller.leaderboard_reset()
                 else:
                     self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
                     return
@@ -1384,6 +1393,7 @@ def build_parser() -> argparse.ArgumentParser:
     raw = sub.add_parser("raw", help="send an arbitrary RCON command")
     raw.add_argument("command", nargs=argparse.REMAINDER)
     sub.add_parser("console", help="open an interactive RCON console")
+    sub.add_parser("leaderboard-reset", help="wipe the leaderboard and start counting with the next map (run as the service user)")
     web = sub.add_parser("web", help="serve the private web panel")
     web.add_argument("--listen", default=os.environ.get("COD4_CONTROL_LISTEN", "127.0.0.1"))
     web.add_argument("--web-port", type=int, default=int(os.environ.get("COD4_CONTROL_PORT", "8787")))
@@ -1403,6 +1413,8 @@ def main() -> int:
             print_dashboard(controller.dashboard(), args.json)
         elif args.action == "settings":
             print(json.dumps(controller.settings(), indent=2))
+        elif args.action == "leaderboard-reset":
+            print(controller.leaderboard_reset())
         elif args.action == "hardpoint":
             requested = {}
             if args.start_seconds is not None:

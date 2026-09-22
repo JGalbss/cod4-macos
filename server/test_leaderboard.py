@@ -180,6 +180,36 @@ class IngestTests(unittest.TestCase):
         filters = self.fixture.store.filters()
         self.assertEqual({entry["id"] for entry in filters["gametypes"]}, {"dm", "war"})
 
+    def test_reset_forgets_history_and_counts_only_new_maps(self) -> None:
+        self.fixture.append(
+            self.fixture.game_log,
+            init_game("0:00", "dm", "mp_shipment", START),
+            kill("0:30", "Oct", "Josh"),
+            "1:00 ExitLevel: executed",
+        )
+        self.fixture.store.set_hidden("nativeinputcheck", True, "harness client")
+        self.assertEqual(self.players()["josh"]["kills"], 1)
+        result = self.fixture.store.reset()
+        self.assertIsNotNone(result["trackingSince"])
+        snapshot = self.fixture.store.snapshot()
+        self.assertEqual(snapshot["players"], [])
+        self.assertEqual(snapshot["totalMatches"], 0)
+        self.assertEqual(snapshot["trackingSince"], result["trackingSince"])
+        # a map that started before the wipe stays forgotten even when the whole log is re-read
+        self.fixture.game_log.write_text(self.fixture.game_log.read_text())
+        later = datetime.now(timezone.utc) + timedelta(minutes=1)
+        self.fixture.append(
+            self.fixture.game_log,
+            init_game("5:00", "war", "mp_crash", later),
+            kill("5:30", "Josh", "Oct", victim_team="allies", attacker_team="axis"),
+        )
+        self.fixture.store.ingest(force=True)
+        players = self.players()
+        self.assertEqual(set(players), {"oct", "josh"})
+        self.assertEqual(players["oct"]["kills"], 1)
+        self.assertEqual(players["josh"]["kills"], 0)
+        self.assertIn("nativeinputcheck", {row["key"] for row in self.fixture.store._connection().execute("SELECT key FROM players WHERE hidden = 1")})
+
     def test_query_validation(self) -> None:
         with self.assertRaises(LeaderboardError):
             Query.from_params({"window": ["yesterday"]})
