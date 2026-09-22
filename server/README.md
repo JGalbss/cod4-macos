@@ -109,9 +109,20 @@ shares one installation key, so anything keyed by GUID merges everyone into one 
 
 Filters: time window, mode, map, name search, minimum matches, bots and test clients hidden by
 default (and hideable per player). Wins and losses count completed matches with a recorded
-winner; in team modes one recorded winner settles the whole team. The API is
-`/api/leaderboard`, `/api/leaderboard/filters`, `/api/leaderboard/player?key=` and
-`POST /api/leaderboard/hide`.
+winner; in team modes one recorded winner settles the whole team. Hardscope stats come from
+`Scope` and `ScopeKill` lines the mod writes while a sniper's scope is up: average scope hold,
+scoped seconds per sniper kill, and the share of sniper kills taken after a one-second hold.
+The API is `/api/leaderboard`, `/api/leaderboard/filters`, `/api/leaderboard/player?key=`,
+`POST /api/leaderboard/hide` and `POST /api/leaderboard/reset` (`confirm: wipe`), which the
+page's Wipe button and `cod4ctl leaderboard-reset` call to start a new season with the next map.
+The server config sets `g_logSync 1` so log lines land as they happen.
+
+## Kill streaks
+
+`hardpoint_streak "1"` in `new_exp_config.cfg` makes kills from streak rewards count toward the
+next streak. `patch-streak-carry.py` patches `_globallogic.gsx` so a streak survives Search and
+Destroy round restarts: the count lives in `game[]` per client slot, a death or disconnect
+clears it, and a carried streak logs `StreakCarry;<name>;<streak>`.
 
 ## Josh bots
 
