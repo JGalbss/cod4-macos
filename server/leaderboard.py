@@ -311,8 +311,9 @@ class LeaderboardStore:
             return
         current = self._open_match(db)
         if current is not None and not current["closed"] and current["gametype"] == gametype and current["map"] == game_map:
-            # A round restart (Search and Destroy rounds, "restart round" from the panel) keeps the match.
-            db.execute("UPDATE matches SET rounds = rounds + 1, base_at = ?, base_offset = ? WHERE id = ?", (base_at, offset, current["id"]))
+            # A round restart (Search and Destroy rounds, "restart round" from the panel) keeps the match
+            # and its clock pin: the log clock runs on through a restart while g_mapStartTime may not move.
+            db.execute("UPDATE matches SET rounds = rounds + 1 WHERE id = ?", (current["id"],))
             return
         if current is not None:
             self._close_match(db, current, max(current["started_at"], base_at - 1))
