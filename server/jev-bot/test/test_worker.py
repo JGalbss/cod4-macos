@@ -46,6 +46,16 @@ def observation_lines(bot=0, sequence=1, order=('enemies', 'nav', 'events', 'sel
     return [part(name, bot, sequence, **payloads[name]) for name in order]
 
 
+class JoinerResetTests(unittest.TestCase):
+    def test_a_fresh_client_with_a_low_sequence_is_not_stale(self):
+        joiner = WORKER.ObservationJoiner(2)
+        joiner.last_forwarded[0] = 1542
+        self.assertFalse(joiner.add({'botId': 0, 'sequence': 1540, 'part': 'events'}), 'a trailing part of an older observation is still stale')
+        self.assertTrue(joiner.add({'botId': 0, 'sequence': 3, 'part': 'events'}), 'a restart of the sequence means a new client')
+        self.assertEqual(joiner.last_forwarded[0], 0)
+        self.assertTrue(joiner.add({'botId': 0, 'sequence': 4, 'part': 'events'}))
+
+
 class CommandTests(unittest.TestCase):
     def test_full_command_builds_canonical_wire_in_table_order(self):
         message = command(3, w='keep', a='auto', r='on', s='crouch', l='-90', g='n41', e='f', t='2')

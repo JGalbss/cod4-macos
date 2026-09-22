@@ -494,6 +494,10 @@ class Controller:
     def set_bots_enabled(self, enabled: object) -> str:
         flag = "1" if enabled is True or enabled in (1, "1", "true") else "0"
         self.connection.rcon("set jev_live 1")
+        if flag == "0":
+            # Disable means gone for good: the fixture clears the wanted roster itself while a match
+            # runs, but between maps it is asleep, so clear it here too or the bots return next map.
+            self.connection.rcon('set jev_roster_wanted ""')
         return self.connection.rcon(f"set jev_enabled {flag}")
 
     def bot_request(self, action: object, team: object, name: object) -> str:

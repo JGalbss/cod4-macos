@@ -23,6 +23,7 @@ MIN_BOT_COUNT = 1
 MAX_BOT_COUNT = 8  # the live fixture caps Josh bots at 8; the lab stays bounded by MAX_CLIENTS below
 MAX_BW_COUNT = 4
 MAX_CLIENTS = 8
+SEQUENCE_RESET_GAP = 100  # observation sequences run about five per second; a drop this large is a new client
 MAX_LINE = 524288
 MAX_WIRE = 200
 MAX_SCRIPT = 262144
@@ -165,7 +166,12 @@ class ObservationJoiner:
         if part == 'self':
             integer(record.get('parts'), 1, len(PARTS), 'observation parts')
         if sequence <= self.last_forwarded[bot]:
-            return False
+            # A bot re-added after a map change or a restart is a fresh client whose sequence
+            # starts over. Late parts of an older observation trail by a few numbers at most.
+            if self.last_forwarded[bot] - sequence < SEQUENCE_RESET_GAP:
+                return False
+            self.last_forwarded[bot] = 0
+            self.pending = {key: value for key, value in self.pending.items() if key[0] != bot}
         parts = self.pending.setdefault((bot, sequence), {})
         if part in parts:
             raise ValueError('Duplicate observation part')
