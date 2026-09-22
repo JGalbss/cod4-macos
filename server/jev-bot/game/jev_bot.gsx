@@ -52,6 +52,7 @@ main()
 	buildEdgeLengths();
 	thread roundEnd();
 	thread watchConnections();
+	if (s.live) registerConnectedPlayers();
 	thread watchBomb();
 	level endon("game_ended"); level endon("jev_bot_stop");
 	if (s.gameMode != "war" && s.gameMode != "dm" && s.gameMode != "sd" && s.gameMode != "dom" && s.gameMode != "koth") { unsupported("unsupported_gametype", "gametype " + s.gameMode + " is not supported"); return; }
@@ -496,6 +497,22 @@ watchConnections()
 			emit("bot_readopted", "\"botId\":" + player.jevId);
 		}
 		else if (isDefined(player.pers["jevExternal"])) { player.jevExternal = true; level.jevBot.external[level.jevBot.external.size] = player; }
+	}
+}
+
+// The panel can switch the bots on in the middle of a map. Everyone already on the server fired
+// their "connected" notify long before watchConnections() existed, so take the roster as it stands;
+// otherwise the bots never see, hear or shoot at those players.
+registerConnectedPlayers()
+{
+	players = level.players;
+	if (!isDefined(players)) return;
+	for (i = 0; i < players.size; i++)
+	{
+		player = players[i];
+		if (!isDefined(player) || isDefined(player.jevId)) continue;
+		player registerPlayer();
+		if (isDefined(player.pers["jevExternal"])) { player.jevExternal = true; level.jevBot.external[level.jevBot.external.size] = player; }
 	}
 }
 
