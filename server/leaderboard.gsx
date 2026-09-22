@@ -102,7 +102,53 @@ record( event )
 {
 	key = self identity();
 	if ( !isDefined(key) ) return false;
+	if ( event == "K" && isDefined(self.leaderboardScopedSince) )
+	{
+		self.leaderboardScopeKills++;
+		logPrint("ScopeKill;" + sanitizeName(self.name) + ";" + self getCurrentWeapon() + ";" + (getTime() - self.leaderboardScopedSince) + "\n");
+	}
 	return appendEvent(event,key,self.name);
+}
+isSniperWeapon( weapon )
+{
+	if ( !isDefined(weapon) || !isString(weapon) ) return false;
+	return isSubStr(weapon,"m40a3") || isSubStr(weapon,"remington700") || isSubStr(weapon,"barrett") || isSubStr(weapon,"dragunov") || isSubStr(weapon,"m21");
+}
+// Scope time goes to the game log, where the control panel reads it next to the kills:
+//   Scope;<name>;<weapon>;<ms scoped>;<kills while scoped>   when the scope comes down
+//   ScopeKill;<name>;<weapon>;<ms scoped before the kill>    at each kill made while scoped
+scopeWatch()
+{
+	self endon("disconnect");
+	level endon("game_ended");
+	self notify("leaderboard_scope_restart");
+	self endon("leaderboard_scope_restart");
+	self.leaderboardScopedSince = undefined;
+	self.leaderboardScopeKills = 0;
+	weapon = "none";
+	for (;;)
+	{
+		wait 0.05;
+		alive = isAlive(self) && isDefined(self.sessionstate) && self.sessionstate == "playing";
+		scoped = false;
+		if ( alive )
+		{
+			current = self getCurrentWeapon();
+			scoped = isSniperWeapon(current) && self playerADS() >= 0.5;
+			if ( scoped ) weapon = current;
+		}
+		if ( scoped && !isDefined(self.leaderboardScopedSince) )
+		{
+			self.leaderboardScopedSince = getTime();
+			self.leaderboardScopeKills = 0;
+		}
+		else if ( !scoped && isDefined(self.leaderboardScopedSince) )
+		{
+			logPrint("Scope;" + sanitizeName(self.name) + ";" + weapon + ";" + (getTime() - self.leaderboardScopedSince) + ";" + self.leaderboardScopeKills + "\n");
+			self.leaderboardScopedSince = undefined;
+		}
+		if ( !alive ) return;
+	}
 }
 
 onSpawn()
@@ -112,6 +158,7 @@ onSpawn()
 	if ( !isDefined(key) ) return;
 	if ( !isDefined(self.pers["team"]) || (self.pers["team"] != "allies" && self.pers["team"] != "axis") ) return;
 	if ( !isDefined(self.hasSpawned) || !self.hasSpawned || self.sessionteam == "spectator" ) return;
+	self thread scopeWatch();
 	game["leaderboardParticipants"][key] = true;
 	if ( isDefined(game["leaderboardPresenceWritten"][key]) ) return;
 	if ( appendEvent("P",key,self.name) ) game["leaderboardPresenceWritten"][key] = true;

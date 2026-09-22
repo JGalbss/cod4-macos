@@ -180,6 +180,32 @@ class IngestTests(unittest.TestCase):
         filters = self.fixture.store.filters()
         self.assertEqual({entry["id"] for entry in filters["gametypes"]}, {"dm", "war"})
 
+    def test_scope_lines_give_hardscope_stats(self) -> None:
+        self.fixture.append(
+            self.fixture.game_log,
+            init_game("0:00", "dm", "mp_shipment", START),
+            "0:20 ScopeKill;Josh;m40a3_mp;400",
+            kill("0:20", "Oct", "Josh", weapon="m40a3_mp"),
+            "0:21 Scope;Josh;m40a3_mp;1200;1",
+            "0:40 ScopeKill;Josh;m40a3_mp;2600",
+            kill("0:40", "Oct", "Josh", weapon="m40a3_mp"),
+            "0:41 Scope;Josh;m40a3_mp;3000;1",
+            "0:50 Scope;Josh;m40a3_mp;1800;0",
+            kill("0:55", "Oct", "Josh", weapon="ak47_mp"),
+            "1:00 ExitLevel: executed",
+        )
+        josh = self.players()["josh"]
+        self.assertEqual(josh["kills"], 3)
+        self.assertEqual(josh["sniper_kills"], 2)
+        self.assertEqual(josh["scope_sessions"], 3)
+        self.assertEqual(josh["scope_total_s"], 6.0)
+        self.assertEqual(josh["scope_avg_s"], 2.0)
+        self.assertEqual(josh["scope_per_kill_s"], 3.0)
+        self.assertEqual((josh["scope_kills"], josh["hardscope_kills"], josh["hardscope_pct"]), (2, 1, 50))
+        detail = self.fixture.store.player("josh")
+        self.assertEqual(detail["sniping"]["hardscope_kills"], 1)
+        self.assertIsNone(self.players()["oct"]["scope_avg_s"])
+
     def test_reset_forgets_history_and_counts_only_new_maps(self) -> None:
         self.fixture.append(
             self.fixture.game_log,

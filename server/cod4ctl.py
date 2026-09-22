@@ -1096,6 +1096,10 @@ const COLUMNS=[
   {key:'knife',label:'Knife',sort:'knife',fmt:r=>r.knife},
   {key:'explosive',label:'Nades',sort:'explosive',fmt:r=>r.explosive},
   {key:'damage',label:'Damage',sort:'damage',fmt:r=>r.damage},
+  {key:'sniper_kills',label:'Sniper K',sort:'sniper_kills',fmt:r=>r.sniper_kills},
+  {key:'scope_avg_s',label:'Scope avg',sort:'scope_avg_s',fmt:r=>r.scope_avg_s===null?'—':r.scope_avg_s.toFixed(2)+'s',title:()=>'Average time the scope stays up per scope-in'},
+  {key:'scope_per_kill_s',label:'Scope/kill',sort:'scope_per_kill_s',fmt:r=>r.scope_per_kill_s===null?'—':r.scope_per_kill_s.toFixed(1)+'s',title:()=>'Total scoped seconds per sniper kill; lower means quicker scopes'},
+  {key:'hardscope_pct',label:'Hardscope',sort:'hardscope_pct',fmt:r=>pct(r.hardscope_pct),title:()=>'Sniper kills taken after holding the scope 1 s or longer'},
   {key:'fav_weapon',label:'Fav weapon',sort:null,fmt:r=>r.fav_weapon},
   {key:'last_seen',label:'Last seen',sort:'last_seen',fmt:r=>ago(r.last_seen),title:r=>r.last_seen?new Date(r.last_seen).toLocaleString():''}
 ];
@@ -1117,6 +1121,7 @@ async function select(key){state.selected=key;document.querySelectorAll('#rows t
   table('By mode',['Mode','Matches','K','D','K/D','W','L'],d.byGametype,r=>[r.id,r.matches,r.kills,r.deaths,ratio(r.kd,r.kills,r.deaths),r.wins,r.losses]),
   table('By map',['Map','Matches','K','D','K/D','W','L'],d.byMap,r=>[r.id.replace(/^mp_/,''),r.matches,r.kills,r.deaths,ratio(r.kd,r.kills,r.deaths),r.wins,r.losses]),
   table('Weapons',['Weapon','Kills'],d.weapons,r=>[r.weapon,r.kills]),
+  table('Sniping',['Stat','Value'],d.sniping?[['Sniper kills',d.sniping.sniper_kills],['Scope-ins',d.sniping.scope_sessions],['Total scoped',duration(Math.round(d.sniping.scope_total_s))],['Avg scope hold',d.sniping.scope_avg_s===null?'—':d.sniping.scope_avg_s.toFixed(2)+' s'],['Scope time per sniper kill',d.sniping.scope_per_kill_s===null?'—':d.sniping.scope_per_kill_s.toFixed(1)+' s'],['Kills while scoped',d.sniping.scope_kills],['Hardscope kills (≥1 s)',d.sniping.hardscope_kills+' ('+pct(d.sniping.hardscope_pct)+')']]:[],r=>[r[0],r[1]]),
   table('Nemesis (killed you most, all time)',['Player','Kills'],d.nemeses,r=>[r.name,r.kills]),
   table('Favourite victim (all time)',['Player','Kills'],d.victims,r=>[r.name,r.kills]),
   table('Recent matches',['When','Map','Mode','K','D','HS','Streak','Time','Result'],d.recent,r=>[new Date(r.startedAt).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}),r.map.replace(/^mp_/,''),r.gametype+(r.rounds>1?' ×'+r.rounds:''),r.kills,r.deaths,r.headshots,r.bestStreak,duration(r.seconds),result(r.result)]));

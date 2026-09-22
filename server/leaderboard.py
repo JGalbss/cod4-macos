@@ -36,7 +36,10 @@ WINDOWS: dict[str, int | None] = {"all": None, "24h": 86400, "7d": 7 * 86400, "3
 SORTS = (
     "kills", "deaths", "kd", "headshots", "hs_pct", "wins", "losses", "win_pct", "matches",
     "playtime_s", "best_streak", "kpm", "damage", "knife", "explosive", "suicides", "last_seen", "name",
+    "sniper_kills", "scope_avg_s", "scope_per_kill_s", "hardscope_pct", "scope_total_s",
 )
+SNIPER_WEAPONS = ("m40a3", "remington700", "barrett", "dragunov", "m21")
+HARDSCOPE_MS = 1000  # scoped at least this long before the shot counts as a hardscope kill
 TOKEN_RE = re.compile(r"^[a-z0-9_]{1,40}$")
 # Harness clients from the engineering lanes; never real players.
 DEFAULT_HIDDEN = {
@@ -66,7 +69,10 @@ CREATE TABLE IF NOT EXISTS participation(
   explosive INTEGER NOT NULL DEFAULT 0, damage INTEGER NOT NULL DEFAULT 0,
   streak INTEGER NOT NULL DEFAULT 0, best_streak INTEGER NOT NULL DEFAULT 0,
   joined_at INTEGER, left_at INTEGER, seconds INTEGER NOT NULL DEFAULT 0, present INTEGER NOT NULL DEFAULT 1,
-  team TEXT NOT NULL DEFAULT '', result TEXT, PRIMARY KEY(match_id, key));
+  team TEXT NOT NULL DEFAULT '', result TEXT,
+  sniper_kills INTEGER NOT NULL DEFAULT 0, scope_ms INTEGER NOT NULL DEFAULT 0, scope_sessions INTEGER NOT NULL DEFAULT 0,
+  scope_kills INTEGER NOT NULL DEFAULT 0, scope_kill_ms INTEGER NOT NULL DEFAULT 0, hardscope_kills INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(match_id, key));
 CREATE INDEX IF NOT EXISTS participation_key ON participation(key);
 CREATE TABLE IF NOT EXISTS weapon_kills(match_id INTEGER NOT NULL, key TEXT NOT NULL, weapon TEXT NOT NULL, kills INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(match_id, key, weapon));
 CREATE TABLE IF NOT EXISTS kill_pairs(killer TEXT NOT NULL, victim TEXT NOT NULL, kills INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(killer, victim));
@@ -158,10 +164,30 @@ def parse_map_start(text: str) -> int | None:
         return None
 
 
+def is_sniper(weapon: str) -> bool:
+    return any(name in weapon for name in SNIPER_WEAPONS)
+
+
 def ratio(numerator: int, denominator: int, digits: int = 2) -> float | None:
     if denominator == 0:
         return None
     return round(numerator / denominator, digits)
+
+
+def sniping(row: sqlite3.Row) -> dict[str, object]:
+    """Hardscope numbers from the mod's Scope and ScopeKill lines: how long the scope stays up,
+    scope seconds spent per sniper kill, and the share of sniper kills taken after a long hold."""
+    scope_s = row["scope_ms"] / 1000
+    return {
+        "sniper_kills": row["sniper_kills"],
+        "scope_sessions": row["scope_sessions"],
+        "scope_total_s": round(scope_s, 1),
+        "scope_avg_s": ratio(row["scope_ms"], 1000 * row["scope_sessions"], 2),
+        "scope_per_kill_s": round(scope_s / row["sniper_kills"], 2) if row["sniper_kills"] else None,
+        "scope_kills": row["scope_kills"],
+        "hardscope_kills": row["hardscope_kills"],
+        "hardscope_pct": ratio(100 * row["hardscope_kills"], row["sniper_kills"], 0),
+    }
 
 
 class LeaderboardStore:
@@ -205,7 +231,16 @@ class LeaderboardStore:
             self._db.execute("PRAGMA journal_mode=WAL")
             self._db.execute("PRAGMA synchronous=NORMAL")
             self._db.executescript(SCHEMA)
+            self._migrate(self._db)
         return self._db
+
+    @staticmethod
+    def _migrate(db: sqlite3.Connection) -> None:
+        """Columns added after the first release; an existing database gains them in place."""
+        present = {row["name"] for row in db.execute("PRAGMA table_info(participation)")}
+        for column in ("sniper_kills", "scope_ms", "scope_sessions", "scope_kills", "scope_kill_ms", "hardscope_kills"):
+            if column not in present:
+                db.execute(f"ALTER TABLE participation ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0")
 
     # ------------------------------------------------------------------ ingestion
 
@@ -293,6 +328,10 @@ class LeaderboardStore:
             self._join(db, match["id"], at, fields[3])
         elif kind == "Q" and len(fields) >= 4:
             self._quit(db, match["id"], at, fields[3])
+        elif kind == "Scope" and len(fields) >= 5:
+            self._scope_session(db, match["id"], at, fields)
+        elif kind == "ScopeKill" and len(fields) >= 4:
+            self._scope_kill(db, match["id"], at, fields)
 
     def _tracking_since(self, db: sqlite3.Connection) -> int | None:
         row = db.execute("SELECT value FROM meta WHERE key = 'tracking_since'").fetchone()
@@ -401,6 +440,8 @@ class LeaderboardStore:
             "streak = streak + 1, best_streak = MAX(best_streak, streak + 1) WHERE match_id = ? AND key = ?",
             (headshot, knife, explosive, match_id, attacker),
         )
+        if is_sniper(weapon):
+            db.execute("UPDATE participation SET sniper_kills = sniper_kills + 1 WHERE match_id = ? AND key = ?", (match_id, attacker))
         weapon_key = "knife" if knife else weapon
         db.execute(
             "INSERT INTO weapon_kills(match_id, key, weapon, kills) VALUES(?, ?, ?, 1) "
@@ -410,6 +451,26 @@ class LeaderboardStore:
         db.execute(
             "INSERT INTO kill_pairs(killer, victim, kills) VALUES(?, ?, 1) ON CONFLICT(killer, victim) DO UPDATE SET kills = kills + 1",
             (attacker, victim),
+        )
+
+    def _scope_session(self, db: sqlite3.Connection, match_id: int, at: int, fields: list[str]) -> None:
+        """Scope;<name>;<weapon>;<ms>;<kills while scoped>: one scoped stretch with a sniper, written by the mod."""
+        if not fields[1] or not re.fullmatch(r"[0-9]{1,8}", fields[3]):
+            return
+        key = self._touch(db, match_id, at, fields[1])
+        db.execute("UPDATE participation SET scope_ms = scope_ms + ?, scope_sessions = scope_sessions + 1 WHERE match_id = ? AND key = ?",
+                   (int(fields[3]), match_id, key))
+
+    def _scope_kill(self, db: sqlite3.Connection, match_id: int, at: int, fields: list[str]) -> None:
+        """ScopeKill;<name>;<weapon>;<ms scoped before the shot>."""
+        if not fields[1] or not re.fullmatch(r"[0-9]{1,8}", fields[3]):
+            return
+        key = self._touch(db, match_id, at, fields[1])
+        held = int(fields[3])
+        db.execute(
+            "UPDATE participation SET scope_kills = scope_kills + 1, scope_kill_ms = scope_kill_ms + ?, hardscope_kills = hardscope_kills + ? "
+            "WHERE match_id = ? AND key = ?",
+            (held, 1 if held >= HARDSCOPE_MS else 0, match_id, key),
         )
 
     def _damage(self, db: sqlite3.Connection, match_id: int, at: int, fields: list[str]) -> None:
@@ -567,7 +628,9 @@ class LeaderboardStore:
                        SUM(p.teamkills) teamkills, SUM(p.knife) knife, SUM(p.explosive) explosive, SUM(p.damage) damage,
                        MAX(p.best_streak) best_streak, SUM(p.seconds) seconds, COUNT(*) matches,
                        SUM(CASE WHEN p.result = 'win' THEN 1 ELSE 0 END) wins, SUM(CASE WHEN p.result = 'loss' THEN 1 ELSE 0 END) losses,
-                       MIN(m.started_at) first_at, MAX(COALESCE(m.ended_at, m.started_at)) last_at
+                       MIN(m.started_at) first_at, MAX(COALESCE(m.ended_at, m.started_at)) last_at,
+                       SUM(p.sniper_kills) sniper_kills, SUM(p.scope_ms) scope_ms, SUM(p.scope_sessions) scope_sessions,
+                       SUM(p.scope_kills) scope_kills, SUM(p.scope_kill_ms) scope_kill_ms, SUM(p.hardscope_kills) hardscope_kills
                 FROM participation p JOIN matches m ON m.id = p.match_id
                 WHERE {scope}
                 GROUP BY p.key
@@ -605,6 +668,7 @@ class LeaderboardStore:
                 "kpm": ratio(60 * kills, row["seconds"], 2) if row["seconds"] >= 60 else None,
                 "fav_weapon": weapons.get(row["key"], "—"),
                 "first_seen": iso(row["first_at"]), "last_seen": iso(row["last_at"]),
+                **sniping(row),
             })
         players.sort(key=lambda entry: self._sort_value(entry, query.sort), reverse=query.descending)
         for rank, entry in enumerate(players, 1):
@@ -704,6 +768,14 @@ class LeaderboardStore:
                 """,
                 [key, *values],
             ).fetchall()
+            snipe = db.execute(
+                f"""
+                SELECT SUM(p.sniper_kills) sniper_kills, SUM(p.scope_ms) scope_ms, SUM(p.scope_sessions) scope_sessions,
+                       SUM(p.scope_kills) scope_kills, SUM(p.scope_kill_ms) scope_kill_ms, SUM(p.hardscope_kills) hardscope_kills
+                FROM participation p JOIN matches m ON m.id = p.match_id WHERE p.key = ? AND {scope}
+                """,
+                [key, *values],
+            ).fetchone()
             nemeses = db.execute(
                 "SELECT k.killer key, COALESCE(pl.name, k.killer) name, k.kills FROM kill_pairs k LEFT JOIN players pl ON pl.key = k.killer "
                 "WHERE k.victim = ? ORDER BY k.kills DESC LIMIT 3",
@@ -724,6 +796,7 @@ class LeaderboardStore:
             "firstSeen": iso(roster["first_seen"]), "lastSeen": iso(roster["last_seen"]),
             "byGametype": breakdown(by_mode), "byMap": breakdown(by_map),
             "weapons": [{"weapon": weapon_label(row["weapon"]), "kills": row["kills"]} for row in weapons],
+            "sniping": sniping(snipe) if snipe["scope_sessions"] is not None else None,
             "nemeses": [{"key": row["key"], "name": row["name"], "kills": row["kills"]} for row in nemeses],
             "victims": [{"key": row["key"], "name": row["name"], "kills": row["kills"]} for row in victims],
             "recent": [{
