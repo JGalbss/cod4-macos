@@ -6,13 +6,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTROL_SOURCE="${1:-$SCRIPT_DIR/cod4ctl.py}"
 UNIT_SOURCE="${2:-$SCRIPT_DIR/cod4-control.service}"
+CATALOG_SOURCE="${COD4_MAP_CATALOG_SOURCE:-$(dirname "$CONTROL_SOURCE")/community-maps.json}"
 SERVER_CONFIG="${COD4_SERVER_CONFIG:-/opt/cod4/main/server.cfg}"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "run control.sh as root" >&2
   exit 1
 fi
-for required in "$CONTROL_SOURCE" "$UNIT_SOURCE" "$SERVER_CONFIG"; do
+for required in "$CONTROL_SOURCE" "$(dirname "$CONTROL_SOURCE")/leaderboard.py" "$UNIT_SOURCE" "$CATALOG_SOURCE" "$SERVER_CONFIG"; do
   if [ ! -f "$required" ]; then
     echo "missing required file: $required" >&2
     exit 1
@@ -25,6 +26,8 @@ fi
 
 install -d -m 0755 /usr/local/lib/cod4-control
 install -m 0755 "$CONTROL_SOURCE" /usr/local/lib/cod4-control/cod4ctl.py
+install -m 0644 "$(dirname "$CONTROL_SOURCE")/leaderboard.py" /usr/local/lib/cod4-control/leaderboard.py
+install -m 0644 "$CATALOG_SOURCE" /usr/local/lib/cod4-control/community-maps.json
 ln -sfn /usr/local/lib/cod4-control/cod4ctl.py /usr/local/bin/cod4ctl
 
 install -d -o root -g cod4 -m 0750 /etc/cod4-control

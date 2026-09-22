@@ -1,0 +1,395 @@
+{
+  "schema_version": 1,
+  "maps": [
+    {
+      "id": "mp_nuketown",
+      "name": "Nuketown",
+      "gametypes": [
+        "dm",
+        "war",
+        "sd",
+        "sab",
+        "dom",
+        "koth"
+      ],
+      "author": ">>N.B.Z.I.<<",
+      "source": "https://www.moddb.com/addons/nbzi-nuketown-cod4",
+      "archive_url": "https://www.customapscod.com/ftp/maps/COD4/mp_nbzinuketown.zip",
+      "archive_sha256": "69d7666d72bac8cbdde329ec5cd3ed855f7768eb8c8d12733b17eaa4ea1cc92b",
+      "files": {
+        "mp_nuketown.ff": "992e652564d40d93df06be94c92d8642880a33266f7fb070e9cfda973eedfbc1",
+        "mp_nuketown.iwd": "33d29540282720cc130af0c92aa7f6979827497e5bc94c799ef8d08bd33b202d",
+        "mp_nuketown_load.ff": "e7546ba31565eef477ada11cd8b490ff837aa648ad724b8ae52c26c7e064c5ab",
+        "readme.txt": "5acd9802acb3944499a03bbf385daf1688d26de80c464baa67fe9ef6bd666a63"
+      }
+    },
+    {
+      "id": "mp_highrise",
+      "name": "Highrise",
+      "gametypes": [
+        "dm",
+        "war",
+        "sd",
+        "sab",
+        "dom",
+        "koth"
+      ],
+      "author": "Neusatz",
+      "source": "https://www.moddb.com/mods/cod-mw2-mod/addons/highrise-by-neusatz-cod4",
+      "archive_url": "https://www.customapscod.com/ftp/maps/COD4/mp_highrise.rar",
+      "archive_sha256": "c7d47f62c13fa3c095a3d270d14708cc0981ac2bfcf1e1de986841c7b5218bbc",
+      "files": {
+        "mp_highrise.ff": "ff99561e890e156d27fe3ab4ed4fdbd147e5c5e468733eae4871ce08f5da185d",
+        "mp_highrise.iwd": "8faa87fe5db526f1d7b36ffddba7a2cbd30f652063c7fa1451414873b420457f",
+        "mp_highrise_load.ff": "f436144c3212b31cbf187f20c2789ebdb699cc6782f65d0562f96afe55bf2680"
+      }
+    },
+    {
+      "id": "mp_mw2_rust",
+      "name": "Rust",
+      "gametypes": [
+        "dm",
+        "war",
+        "sd",
+        "sab",
+        "dom",
+        "koth"
+      ],
+      "author": "Stendby",
+      "source": "https://www.customapscod.com/map.php?id=MTU2NQ==",
+      "archive_url": "https://www.customapscod.com/ftp/maps/COD4/mp_mw2_rust.rar",
+      "archive_sha256": "e9209ba4f86befa6c1640684d3f83e422452b90d129eecc30159f8e6e07cd09c",
+      "files": {
+        "mp_mw2_rust.ff": "6595f78a215078f75005fad88f26faeed7c38fe4f0e77181bedde514fcb19f5c",
+        "mp_mw2_rust.iwd": "ee89720fbeea679da39a88dc68f9230d0d7f331a0e2177f6162e496781865018",
+        "mp_mw2_rust_load.ff": "ad1cf905f3d576340d769547563c5b4bac2cc30186fd241a50a3da7ec5a996ca"
+      }
+    },
+    {
+      "id": "mp_mw2_term",
+      "name": "Terminal",
+      "gametypes": [
+        "dm",
+        "war",
+        "sd",
+        "sab",
+        "dom",
+        "koth"
+      ],
+      "author": "-]K6[-Grimm",
+      "source": "https://www.customapscod.com/map.php?id=OTAz",
+      "archive_url": "https://www.customapscod.com/ftp/maps/COD4/mp_mw2_term.zip",
+      "archive_sha256": "3a82a248879eddb395b306e09b34574e767e90b05f9140dfe52a5652163c0974",
+      "files": {
+        "mp_mw2_term.ff": "0793752aa8202a901ca8b89bdb93f9e06c253ca508bf8df35bd8fe78a822bda3",
+        "mp_mw2_term.iwd": "5fadf9f93464ed5f159961cbfe62ec124c9f725729648a29f1ebec2967c2354c",
+        "mp_mw2_term_load.ff": "661984095d3ab0297a11cb8e33e2f811339fdda6122c0e70b078b7c812c7d683"
+      }
+    },
+    {
+      "id": "mp_scrapyard",
+      "name": "Scrapyard",
+      "gametypes": [
+        "dm",
+        "war",
+        "sd",
+        "sab",
+        "dom",
+        "koth"
+      ],
+      "author": "PanzerMan & Dugynight",
+      "source": "https://www.customapscod.com/map.php?id=OTYy",
+      "archive_url": "https://www.customapscod.com/ftp/maps/COD4/mp_sps_scrapyard.rar",
+      "archive_sha256": "1254f66874aa5ba33eaf43a44a096b4f21b12ed7d127c523e1842665ec42b0a5",
+      "files": {
+        "mp_scrapyard.ff": "92c4f2ae370ce4b5100b994b453efbfb1982499aab99f4b5372283803f68ae54",
+        "mp_scrapyard.iwd": "f3d65d63dd8f1e899a0b8442a31903fa21e7f58cff236a7eaa2557b5f840bb05",
+        "mp_scrapyard_load.ff": "0348551556a291b8fc02d47843794664cabd0832de8941c27876bff55f408903"
+      }
+    },
+    {
+      "id": "mp_bailout",
+      "name": "Bailout",
+      "gametypes": [
+        "dm",
+        "war",
+        "sd",
+        "sab",
+        "dom",
+        "koth"
+      ],
+      "author": "Stendby",
+      "source": "https://www.customapscod.com/map.php?id=MjAyNA==",
+      "archive_url": "https://www.customapscod.com/ftp/maps/COD4/mp_bailout.rar",
+      "archive_sha256": "c2c5fbae9b58f2c96cfa92a99a5bdfb0f7551560bc4a49d93c3022ad5d7f0cc1",
+      "files": {
+        "mp_bailout.ff": "9bd90ef0d26ded2bac24064c35dcf6e20f3497209060fb49850def9c3f41ba5f",
+        "mp_bailout.iwd": "0893c56e69aa6957793e8fd3b622cfdf5f4192f2ddcd6ed9eead395d13438fed",
+        "mp_bailout_load.ff": "ef3433c562012c843a228fc8d3c9c10564a5c08a375f0978b9955b9787474a9d",
+        "readme.txt": "8dab3a9d2929dec16181d1d085e2e7d4bc6780fe7c62b6f79cd17727c6b0f114"
+      }
+    },
+    {
+      "id": "mp_derail",
+      "name": "Derail",
+      "gametypes": [
+        "dm",
+        "war",
+        "sd",
+        "sab",
+        "dom",
+        "koth"
+      ],
+      "author": "Stendby",
+      "source": "https://www.customapscod.com/map.php?id=MTg3Nw==",
+      "archive_url": "https://www.customapscod.com/ftp/maps/COD4/mp_derail.rar",
+      "archive_sha256": "ecb8d22917ea7cdb5298426a8d21a241a6474b215af83a8876936ea23a0ff4e5",
+      "files": {
+        "mp_derail.ff": "c929e6dad90921eca14b244440ceca9758e47be32aa37b1c0fdbcb4f84744493",
+        "mp_derail.iwd": "3a66bb4ef2c2420ce5dfb914f7c624ee4588b53c7ae5945386a4250ec618f760",
+        "mp_derail_load.ff": "60535c1639797258cc6ae30df74a5188ea0cc283373b27af21e5fcf7b8dad394",
+        "readme.txt": "07718b1d6d5f71dd8f28b0da2b5c17df5b69e4027fbb2e1c4c24935748c55836"
+      }
+    },
+    {
+      "id": "mp_fav",
+      "name": "Favela",
+      "gametypes": [
+        "dm",
+        "war",
+        "sd",
+        "sab",
+        "dom",
+        "koth"
+      ],
+      "author": "Miregrobar http://codmapper.blogspot.com/",
+      "source": "https://www.customapscod.com/map.php?id=ODIx",
+      "archive_url": "https://www.customapscod.com/ftp/maps/COD4/mp_fav.zip",
+      "archive_sha256": "347d098294e179aa01b188dc0996465c8f4c52ef3dcbe850fa8099259ae75e3a",
+      "files": {
+        "mp_fav.ff": "1faad9b8b1f7e82c23cb60d1068a8bd6bf4e760912092cb302db5db34077362d",
+        "mp_fav.iwd": "e85c762c4d8a1c0efd59f1e8381a1b3aa5085ab5d5483b031d15f5711b6d4c01",
+        "mp_fav_load.ff": "7ed57cf078cea8463657e18ff20a408a21f5d0a57c339a55fc804ff72437db9c"
+      }
+    },
+    {
+      "id": "mp_fuel",
+      "name": "Fuel",
+      "gametypes": [
+        "dm",
+        "war",
+        "sd",
+        "sab",
+        "dom",
+        "koth"
+      ],
+      "author": "Stendby",
+      "source": "https://www.customapscod.com/map.php?id=MTkwMg==",
+      "archive_url": "https://www.customapscod.com/ftp/maps/COD4/mp_fuel.rar",
+      "archive_sha256": "0a1c61f138069addd77edcb106b5e87f6b312cbf6832c23d4670f6fd215afb04",
+      "files": {
+        "mp_fuel.ff": "48885d763c221f93dd0270d03f30216d62655eb7c8b0beba4ff57941a8f2959a",
+        "mp_fuel.iwd": "61df891bd15da319ab17d956a6c77495af612ababbaa29217ebc78c7863f8c1b",
+        "mp_fuel_load.ff": "d7b61a8360c6be2235e32dce1297d6ba92031d03d63cc87ed57d18146ef9b724",
+        "readme.txt": "69a50a7a668297ae9ffddbdf19fabb883e82131c11ed7db9523b36a2c6d6fbd5"
+      }
+    },
+    {
+      "id": "mp_inv",
+      "name": "Invasion",
+      "gametypes": [
+        "dm",
+        "war",
+        "sd",
+        "sab",
+        "dom",
+        "koth"
+      ],
+      "author": "Miregrobar http://codmapper.blogspot.com/",
+      "source": "https://www.customapscod.com/map.php?id=ODYy",
+      "archive_url": "https://www.customapscod.com/ftp/maps/COD4/mp_invasion.zip",
+      "archive_sha256": "3a5d0b374eac125faf3d520ff5908f1fdb872b1b2a444a8fa8010bd3d7bc97b5",
+      "files": {
+        "mp_inv.ff": "40d1ed5fbcdcf3c5c2a662f500a8212c499bc7b658468e7da42b5ce4b0e44a0e",
+        "mp_inv.iwd": "5fef7a763428366b140c781440601b3e9eda404a45d1b9b2506086f37711a95d",
+        "mp_inv_load.ff": "a32a3c0a0b1d968b400b7d6ccf07dd822226e9b7cabc740cbca88f5aecccdb0c",
+        "readme.txt": "943e07bb06daaf339a1f726ffcb8e1a2e8f3726dc2e407b064599f859c30769c"
+      }
+    },
+    {
+      "id": "mp_karachi",
+      "name": "Karachi",
+      "gametypes": [
+        "dm",
+        "war",
+        "sd",
+        "sab",
+        "dom",
+        "koth"
+      ],
+      "author": "Unspecified in the original release",
+      "source": "https://www.customapscod.com/map.php?id=ODY1",
+      "archive_url": "https://www.customapscod.com/ftp/maps/COD4/mp_karachi.zip",
+      "archive_sha256": "995b8f0fe608f3bd102d8e8edc9ab7b7a1a358dd091bba487c2241ca6464470b",
+      "files": {
+        "mp_karachi.ff": "dc290e368d6ab44ca4921b698087387f088a34b7ae13f9fe0d2fb417856adb53",
+        "mp_karachi.iwd": "60d2902e360210c13cd880b60722f1f25062a1a93cb8c265eae0b67a3434e9ff",
+        "mp_karachi_load.ff": "00df8e88d33df56486d0c5a94c0ca528ec4eb5469720a08465df9406692b883e"
+      }
+    },
+    {
+      "id": "mp_mw2_quarry",
+      "name": "Quarry",
+      "gametypes": [
+        "dm",
+        "war",
+        "sd",
+        "sab",
+        "dom",
+        "koth"
+      ],
+      "author": "Stendby https://twitter.com/Asus8911",
+      "source": "https://www.customapscod.com/map.php?id=MTU1OQ==",
+      "archive_url": "https://www.customapscod.com/ftp/maps/COD4/mp_mw2_quarry.rar",
+      "archive_sha256": "9bbd1da746babbad6b7c7a60c21ddb425a2d89eec4c45307ced2aa94a2b98fd9",
+      "files": {
+        "mp_mw2_quarry.ff": "c06df34aa0e411867b8401b30037037eda4354e4a1a547f2e8d72f8367197da6",
+        "mp_mw2_quarry.iwd": "e0f8d4cd5ec4cfcec97ceca925921f875771c05b71dbb7fcc6cbd68e19b045bc",
+        "mp_mw2_quarry_load.ff": "b2b2ee9d8fd4c093a7c0c7bd66f60e75bd1c555d171ab0bad577dfe80d7d411f",
+        "readme.txt": "9eb53305d71df69d37ab97447194c4518aee0392d9f32589df7acdba34ad58e2"
+      }
+    },
+    {
+      "id": "mp_rundown",
+      "name": "Rundown",
+      "gametypes": [
+        "dm",
+        "war",
+        "sd",
+        "sab",
+        "dom",
+        "koth"
+      ],
+      "author": "-]K6[-Grimm & BU|D>ToX",
+      "source": "https://www.customapscod.com/map.php?id=OTUw",
+      "archive_url": "https://www.customapscod.com/ftp/maps/COD4/mp_rundown.rar",
+      "archive_sha256": "00503956d3893fdc72e18f6d8d54cdc8e36d9b48aef13ebdd19eb133c55bd904",
+      "files": {
+        "mp_rundown.ff": "407cc59e2a7006b5f7c6570e163d2304e717991e159f571929f0319be3efdda8",
+        "mp_rundown.iwd": "99062ed58629bcc884611a2b45a13fc084dd72aa41b551daa70dd9964f3036a8",
+        "mp_rundown_load.ff": "3dd2bba0473c8c5bb7554024c580d3fe64fff7ef0f385756e6bcff5db8a28049",
+        "readme.txt": "289f67ce4cd72a57266839d7ad829c2bd1c74358af1e6491e4a71d31d8a27ffc"
+      }
+    },
+    {
+      "id": "mp_compact",
+      "name": "Salvage",
+      "gametypes": [
+        "dm",
+        "war",
+        "sd",
+        "sab",
+        "dom",
+        "koth"
+      ],
+      "author": "[HIVE]DaWizz",
+      "source": "https://www.customapscod.com/map.php?id=MTI1OA==",
+      "archive_url": "https://www.customapscod.com/ftp/maps/COD4/mp_compactf.zip",
+      "archive_sha256": "a9521321be8cee9c253f745f2d3a07512a4cb923e3adffce0866b6436e5bc69d",
+      "files": {
+        "mp_compact.ff": "0f58d72f2bba4c1100e1552834e65e39624064f923aa4b8b9e76a9700ee54e99",
+        "mp_compact.iwd": "8d3fa0c22e6ba87768cbc8d3c1abe6ee58e12f0b9311a481864e831493ada8bb",
+        "mp_compact_load.ff": "802124f1f5270e359af9d9ee3d0f1a453b2565d48d19e0bd96d1f4d59959b283",
+        "readme.txt": "4eb80001b7eb040845e78f9e5861f1e319c253db9318b22ea6e39067f0eec477"
+      }
+    },
+    {
+      "id": "mp_skidrow",
+      "name": "Skidrow",
+      "gametypes": [
+        "dm",
+        "war",
+        "sd",
+        "sab",
+        "dom",
+        "koth"
+      ],
+      "author": "_WarMachine_",
+      "source": "https://www.customapscod.com/map.php?id=OTcz",
+      "archive_url": "https://www.customapscod.com/ftp/maps/COD4/mp_skidrow.rar",
+      "archive_sha256": "e2ba2676b3089107c115d91ffe2d3e961b5ce4c90e0ccbe2edc9f53ed53d206b",
+      "files": {
+        "mp_skidrow.ff": "b41a7dc882ea7e4bb1872f20f3840bacca24fd70ab128a94a750f79d604433d4",
+        "mp_skidrow.iwd": "8962d670b904e5beecf7548a169002e57d7fddb854a2fe958ac8fd1263f92764",
+        "mp_skidrow_load.ff": "d1d3067b2c35a7d13b4b6a6596e47e56cca01e8a7d54b1f49d82c0a9a6df4c3a",
+        "readme.txt": "4651791499f29cd2779ca93b027f19fd12afcbdb4d34820d30ce667d1e2b2a6c"
+      }
+    },
+    {
+      "id": "mp_storm_b",
+      "name": "Storm",
+      "gametypes": [
+        "dm",
+        "war",
+        "sd",
+        "sab",
+        "dom",
+        "koth"
+      ],
+      "author": "[HIVE]DaWizz",
+      "source": "https://www.customapscod.com/map.php?id=OTgz",
+      "archive_url": "https://www.customapscod.com/ftp/maps/COD4/mp_storm_b.zip",
+      "archive_sha256": "492ae1a87e6e253d8cbfaa4475cdbbc92c336e8abc033498fd7c6d8f42bdeadb",
+      "files": {
+        "mp_storm_b.ff": "8250f5bb22d99dca62353bfb03bfa35ce82b4325ba4751cf680967531c3c9be5",
+        "mp_storm_b.iwd": "75e7d74d9d5d83d0d150a9cda349902935e420fa4506cf0223014c6e57510f00",
+        "mp_storm_b_load.ff": "51f2c3d765a10c97981718a0ff2d74a96495e2f36bfc3abbfa098af3fee37f8e",
+        "readme.txt": "cd92db138b6a63c654eaedd2fcef8f5dcacb9c8b198e60064d2175f5820c4278"
+      }
+    },
+    {
+      "id": "mp_mw2_subbase",
+      "name": "Sub Base",
+      "gametypes": [
+        "dm",
+        "war",
+        "sd",
+        "sab",
+        "dom",
+        "koth"
+      ],
+      "author": "Stendby https://twitter.com/Asus8911",
+      "source": "https://www.customapscod.com/map.php?id=MTYyNQ==",
+      "archive_url": "https://www.customapscod.com/ftp/maps/COD4/mp_mw2_subbase.rar",
+      "archive_sha256": "e3382c543a679dc0db18bddee37f4758b4a94452ee2288113dc4b212801ebfea",
+      "files": {
+        "mp_mw2_subbase.ff": "99de9ed4868ba2088c521aa2c4bbac75c6467ed32f8de6360b254b1269df1216",
+        "mp_mw2_subbase.iwd": "609d4e307236ec3a629ab6b30684d14026ec9d539e7bc2d84cfad8232d4daccc",
+        "mp_mw2_subbase_load.ff": "2c75371317bd8b3e5f886e17a071a57165f4bc8b0eebe5c7c2f943430a96f895",
+        "readme.txt": "3031469fe4c7e47febc3c01b86da5b1696e10bc7ad401c840b2111eecc9548cb"
+      }
+    },
+    {
+      "id": "mp_mw2_underpass",
+      "name": "Underpass",
+      "gametypes": [
+        "dm",
+        "war",
+        "sd",
+        "sab",
+        "dom",
+        "koth"
+      ],
+      "author": "Stendby https://twitter.com/Asus8911",
+      "source": "https://www.customapscod.com/map.php?id=MTU3Nw==",
+      "archive_url": "https://www.customapscod.com/ftp/maps/COD4/mp_mw2_underpass.rar",
+      "archive_sha256": "0542a91c9a224680cb82d39e3bb47b5f0fc513cb0bc226b3eb71f3efe53fba1e",
+      "files": {
+        "mp_mw2_underpass.ff": "e22d9efea4e8364364894cd6299fdd2c919879c1043fec6634bf579a9a5563c8",
+        "mp_mw2_underpass.iwd": "e63491f1a30b1a7aa96a2e3baa18aa8cd2278f22fb98d87abef6b324e7c333b5",
+        "mp_mw2_underpass_load.ff": "94db8d7d0f3fe75ae51d58ac7934b833a7b9efa0131bbda610524d1bd52d07cd",
+        "readme.txt": "5f07fbae77e2e7e9ae1e80666df0b955a9bda6bc8f683fdccef207ed1f0685c2"
+      }
+    }
+  ]
+}

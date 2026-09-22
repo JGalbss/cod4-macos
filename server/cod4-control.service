@@ -15,6 +15,8 @@ ExecStart=/usr/local/bin/cod4ctl web --listen 127.0.0.1 --web-port 8787
 Restart=on-failure
 RestartSec=3
 UMask=0077
+# The leaderboard database lives here; systemd keeps it writable under ProtectSystem=strict.
+StateDirectory=cod4-control
 
 # The panel only needs UDP to the local game server and TCP on loopback.
 NoNewPrivileges=true

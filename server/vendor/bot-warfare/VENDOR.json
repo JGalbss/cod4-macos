@@ -1,0 +1,24 @@
+{
+  "repository": "https://github.com/ineedbots/iw3_bot_warfare",
+  "commit": "901895a10dee921142cf4228c467f99013b5b6c4",
+  "committedAt": "2025-05-21T18:24:17Z",
+  "versionString": "2.3.0",
+  "lastRelease": {
+    "tag": "v2.2.0",
+    "commit": "7b52b462e40fa68287b9e54602e52da83b17766c",
+    "publishedAt": "2024-01-13T00:26:50Z"
+  },
+  "license": "author's grant in the release README (see LICENSE-NOTICE.md); no LICENSE file upstream",
+  "files": {
+    "maps/mp/bots/_bot.gsc": "2b81b898cfc808bb1c03b2ba2bd97e342d399bdfd7377a210ad3770766f8e971",
+    "maps/mp/bots/_bot_chat.gsc": "385efafae27d31c3765030292c684bed10d72d2d6ffe6e4e828dbc0d8c134013",
+    "maps/mp/bots/_bot_internal.gsc": "7878c8d0b65dfe30423e51430d84c4cde26116fe48edc39c000b670eb0ef74ba",
+    "maps/mp/bots/_bot_script.gsc": "218abadebaea828411047f39eb4fab4263a15acbd631854f097c359467e25af0",
+    "maps/mp/bots/_bot_utility.gsc": "c5ce15c6c8c64e4a0df233a7333579bed9248499758381c9cc85a197ea791653",
+    "maps/mp/bots/_menu.gsc": "f2c0b4f5683478016c110a48050428858945b5725f4acf3a9a56e41581dc150c",
+    "maps/mp/bots/_wp_editor.gsc": "84cba1597d5080934c873831137f03b1bc48537e9863a641a4c876ac6c0ee823",
+    "maps/mp/bots/waypoints/_custom_map.gsc": "b8bdabd8b749ff72b2ecb9b441116df99a6d9e79288e6e1456510c5a162d6c93",
+    "scriptdata/waypoints/mp_shipment_wp.csv": "97e2ae04ab405e6efe5d1f692b11d703fc47e5224e0d576aa3d26dbdf56d3cc6",
+    "scripts/mp/bots_adapter_cod4x.gsc": "d8c0ad872110568e22098c867d688cba2546bff8796f50ddab106d73194790a2"
+  }
+}
