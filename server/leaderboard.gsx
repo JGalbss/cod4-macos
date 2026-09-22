@@ -134,7 +134,8 @@ scopeWatch()
 		if ( alive )
 		{
 			current = self getCurrentWeapon();
-			scoped = isSniperWeapon(current) && self playerADS() >= 0.5;
+			// Fully scoped only: the hold starts when the scope is all the way in.
+			scoped = isSniperWeapon(current) && self playerADS() >= 1;
 			if ( scoped ) weapon = current;
 		}
 		if ( scoped && !isDefined(self.leaderboardScopedSince) )

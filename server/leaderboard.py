@@ -39,7 +39,7 @@ SORTS = (
     "sniper_kills", "scope_avg_s", "scope_per_kill_s", "hardscope_pct", "scope_total_s",
 )
 SNIPER_WEAPONS = ("m40a3", "remington700", "barrett", "dragunov", "m21")
-HARDSCOPE_MS = 1000  # scoped at least this long before the shot counts as a hardscope kill
+HARDSCOPE_MS = 2000  # fully scoped at least this long before the shot counts as a hardscope kill
 TOKEN_RE = re.compile(r"^[a-z0-9_]{1,40}$")
 # Harness clients from the engineering lanes; never real players.
 DEFAULT_HIDDEN = {

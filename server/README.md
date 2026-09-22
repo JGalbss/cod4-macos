@@ -111,7 +111,7 @@ Filters: time window, mode, map, name search, minimum matches, bots and test cli
 default (and hideable per player). Wins and losses count completed matches with a recorded
 winner; in team modes one recorded winner settles the whole team. Hardscope stats come from
 `Scope` and `ScopeKill` lines the mod writes while a sniper's scope is up: average scope hold,
-scoped seconds per sniper kill, and the share of sniper kills taken after a one-second hold.
+scoped seconds per sniper kill, and the share of sniper kills taken after two seconds fully scoped in.
 The API is `/api/leaderboard`, `/api/leaderboard/filters`, `/api/leaderboard/player?key=`,
 `POST /api/leaderboard/hide` and `POST /api/leaderboard/reset` (`confirm: wipe`), which the
 page's Wipe button and `cod4ctl leaderboard-reset` call to start a new season with the next map.

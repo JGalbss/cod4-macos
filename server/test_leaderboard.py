@@ -187,7 +187,7 @@ class IngestTests(unittest.TestCase):
             "0:20 ScopeKill;Josh;m40a3_mp;400",
             kill("0:20", "Oct", "Josh", weapon="m40a3_mp"),
             "0:21 Scope;Josh;m40a3_mp;1200;1",
-            "0:40 ScopeKill;Josh;m40a3_mp;2600",
+            "0:40 ScopeKill;Josh;m40a3_mp;2100",
             kill("0:40", "Oct", "Josh", weapon="m40a3_mp"),
             "0:41 Scope;Josh;m40a3_mp;3000;1",
             "0:50 Scope;Josh;m40a3_mp;1800;0",
